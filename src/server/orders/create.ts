@@ -10,7 +10,7 @@ import { PaymentMethod, PaymentStatus, OrderStatus } from "@prisma/client";
 export async function getCheckoutLines() {
   const variants = await db.productVariant.findMany({
     take: 2,
-    include: { product: true },
+    include: { product: { include: { images: { take: 1, orderBy: { position: "asc" } } } } },
     orderBy: { createdAt: "asc" },
   });
   return variants.map((v, i) => ({
@@ -18,6 +18,7 @@ export async function getCheckoutLines() {
     productId: v.productId,
     nameAr: v.product.nameAr,
     sku: v.sku,
+    imageUrl: v.product.images[0]?.url ?? null,
     unitPrice: Number(v.price),
     quantity: i === 0 ? 2 : 1,
   }));
@@ -102,6 +103,7 @@ export async function createOrderFromCheckout(input: CreateOrderInput) {
           variantId: l.variantId,
           nameAr: l.nameAr,
           sku: l.sku,
+          imageUrl: l.imageUrl,
           unitPrice: l.unitPrice,
           quantity: l.quantity,
           lineTotal: l.unitPrice * l.quantity,
