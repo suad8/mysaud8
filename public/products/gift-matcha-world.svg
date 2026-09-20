@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="800" height="800" role="img" aria-label="gift-matcha-world">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2f5d33"/><stop offset="1" stop-color="#8fc46a"/>
+    </linearGradient>
+    <radialGradient id="h" cx="0.3" cy="0.2" r="0.9">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.3"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="200" height="200" fill="url(#g)"/>
+  <rect width="200" height="200" fill="url(#h)"/>
+  <g fill="none" stroke="#fff" stroke-opacity="0.75" stroke-width="5" stroke-linejoin="round"><path d="M36 78h128v96H36z" />
+         <path d="M36 78l64-24 64 24" />
+         <path d="M100 54v120M64 78c0-14 12-24 26-24M136 78c0-14-12-24-26-24" /></g>
+</svg>

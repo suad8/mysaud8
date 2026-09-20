@@ -47,7 +47,7 @@ export default async function ProductPage({ params }: Props) {
         {/* المعرض */}
         <div>
           <div className="surface-card relative aspect-square overflow-hidden">
-            <Image src={product.images[0]?.url ?? "/products/box.svg"} alt={product.nameAr} fill sizes="50vw" className="object-cover" priority />
+            <Image src={product.images[0]?.url ?? "/products/placeholder.svg"} alt={product.nameAr} fill sizes="50vw" className="object-cover" priority />
           </div>
           {product.images.length > 1 && (
             <div className="mt-3 grid grid-cols-5 gap-3">

@@ -69,7 +69,7 @@ export default async function AdminReportsPage() {
                   <Price value={c.total} size="sm" />
                 </div>
                 <div className="mt-1.5 h-2 rounded-full bg-[var(--surface-sunken)]">
-                  <div className="h-full rounded-full bg-gold-500" style={{ width: `${(c.total / maxCat) * 100}%` }} />
+                  <div className="h-full rounded-full bg-accent-500" style={{ width: `${(c.total / maxCat) * 100}%` }} />
                 </div>
               </li>
             ))}

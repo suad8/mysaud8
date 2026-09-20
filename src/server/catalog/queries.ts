@@ -30,7 +30,7 @@ function toCard(p: CardRow): ProductCardData {
     slug: p.slug,
     nameAr: p.nameAr,
     shortDescAr: p.shortDescAr,
-    imageUrl: p.images[0]?.url ?? "/products/box.svg",
+    imageUrl: p.images[0]?.url ?? "/products/placeholder.svg",
     price: Number(p.basePrice),
     comparePrice: p.comparePrice == null ? null : Number(p.comparePrice),
     rating,
@@ -135,4 +135,20 @@ export async function getCategories() {
       _count: { select: { products: { where: LIVE } } },
     },
   });
+}
+
+export async function getTestimonials(limit = 3) {
+  const reviews = await db.review.findMany({
+    where: { isApproved: true, rating: { gte: 4 }, comment: { not: null } },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    include: { product: { select: { nameAr: true } } },
+  });
+  return reviews.map((r) => ({
+    id: r.id,
+    authorName: r.authorName,
+    rating: r.rating,
+    comment: r.comment!,
+    productName: r.product.nameAr,
+  }));
 }

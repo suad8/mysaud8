@@ -29,8 +29,8 @@ export default function AdminSettingsPage() {
       <Topbar title="الإعدادات" subtitle="بيانات المتجر والتشغيل" actions={<Button size="sm">حفظ التغييرات</Button>} />
       <div className="grid gap-6 p-5 lg:grid-cols-2 lg:p-8">
         <Section title="بيانات المتجر">
-          <Field label="اسم المتجر" defaultValue="نسيم" />
-          <Field label="الشعار المختصر" defaultValue="عناية وعطور وقهوة" />
+          <Field label="اسم المتجر" defaultValue="فنجان" />
+          <Field label="الشعار المختصر" defaultValue="قهوة مختصة وماتشا فاخرة" />
           <Field label="رقم التواصل" defaultValue="+966500000000" />
           <Field label="البريد الإلكتروني" defaultValue="support@example.com" />
         </Section>
@@ -45,9 +45,9 @@ export default function AdminSettingsPage() {
         </Section>
 
         <Section title="الشحن" desc="مناطق الشحن التفصيلية تُدار من صفحة منفصلة">
-          <Field label="الحد الأدنى للشحن المجاني" defaultValue="300" unit="ر.س" />
-          <Field label="سعر الشحن العادي" defaultValue="25" unit="ر.س" />
-          <Field label="سعر الشحن السريع" defaultValue="45" unit="ر.س" />
+          <Field label="الحد الأدنى للشحن المجاني" defaultValue="200" unit="ر.س" />
+          <Field label="سعر الشحن العادي" defaultValue="20" unit="ر.س" />
+          <Field label="سعر الشحن السريع" defaultValue="40" unit="ر.س" />
         </Section>
 
         <Section title="بوابات الدفع" desc="مفاتيح الربط تُدخل من متغيّرات البيئة لأسباب أمنية">

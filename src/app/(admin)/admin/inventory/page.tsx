@@ -38,7 +38,7 @@ export default async function AdminInventoryPage() {
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-3">
                           <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-[var(--surface-sunken)]">
-                            <Image src={item.variant.product.images[0]?.url ?? "/products/box.svg"} alt="" fill sizes="40px" className="object-cover" />
+                            <Image src={item.variant.product.images[0]?.url ?? "/products/placeholder.svg"} alt="" fill sizes="40px" className="object-cover" />
                           </div>
                           <div>
                             <p className="font-medium">{item.variant.product.nameAr}</p>

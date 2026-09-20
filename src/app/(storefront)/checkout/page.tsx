@@ -28,7 +28,7 @@ const PAYMENT_METHODS = [
 
 export default async function CheckoutPage() {
   const lines = await getDemoCartLines();
-  const totals = calculateTotals({ lines, shippingRate: 25, freeShippingAbove: 300 });
+  const totals = calculateTotals({ lines, shippingRate: 20, freeShippingAbove: 200 });
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
@@ -71,7 +71,7 @@ export default async function CheckoutPage() {
             <div className="mt-4 space-y-2.5">
               {[
                 { label: "توصيل عادي", desc: "خلال 2–4 أيام عمل", price: totals.shippingTotal === 0 ? "مجاني" : null },
-                { label: "توصيل سريع", desc: "خلال يوم عمل واحد", price: "45 ر.س" },
+                { label: "توصيل سريع", desc: "خلال يوم عمل واحد", price: "40 ر.س" },
               ].map((opt, i) => (
                 <label key={opt.label} className={`flex cursor-pointer items-center justify-between rounded-xl border p-4 ${i === 0 ? "border-brand-600 bg-brand-50 dark:bg-brand-950" : ""}`}>
                   <div className="flex items-center gap-3">

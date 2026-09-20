@@ -16,7 +16,7 @@ async function getDemoCartLines() {
     variantId: v.id,
     nameAr: v.product.nameAr,
     optionsLabel: Object.values(v.options as Record<string, string>).join(" · "),
-    imageUrl: v.product.images[0]?.url ?? "/products/box.svg",
+    imageUrl: v.product.images[0]?.url ?? "/products/placeholder.svg",
     slug: v.product.slug,
     unitPrice: Number(v.price),
     quantity: i === 0 ? 2 : 1,
@@ -25,8 +25,8 @@ async function getDemoCartLines() {
 
 export default async function CartPage() {
   const lines = await getDemoCartLines();
-  const totals = calculateTotals({ lines, shippingRate: 25, freeShippingAbove: 300 });
-  const remainingForFreeShipping = Math.max(0, 300 - totals.subtotal);
+  const totals = calculateTotals({ lines, shippingRate: 20, freeShippingAbove: 200 });
+  const remainingForFreeShipping = Math.max(0, 200 - totals.subtotal);
 
   if (lines.length === 0) {
     return (

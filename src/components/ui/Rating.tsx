@@ -21,7 +21,7 @@ export function Rating({
             width={size}
             height={size}
             viewBox="0 0 20 20"
-            className={i < Math.round(value) ? "fill-gold-500" : "fill-ink-300 dark:fill-ink-700"}
+            className={i < Math.round(value) ? "fill-amber-400" : "fill-ink-300 dark:fill-ink-700"}
           >
             <path d="M10 1.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8L10 14.9l-5.2 2.7 1-5.8L1.6 7.7l5.8-.8z" />
           </svg>

@@ -63,7 +63,7 @@ export default async function AdminProductsPage() {
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-3">
                           <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-[var(--surface-sunken)]">
-                            <Image src={p.images[0]?.url ?? "/products/box.svg"} alt="" fill sizes="44px" className="object-cover" />
+                            <Image src={p.images[0]?.url ?? "/products/placeholder.svg"} alt="" fill sizes="44px" className="object-cover" />
                           </div>
                           <div className="min-w-0">
                             <p className="truncate font-medium">{p.nameAr}</p>

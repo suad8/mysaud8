@@ -21,9 +21,9 @@ export function Sidebar() {
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-e bg-[var(--surface-raised)] lg:flex">
       <div className="flex h-16 items-center gap-2.5 border-b px-5">
-        <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-700 text-lg font-bold text-white">ن</span>
+        <span className="grid h-9 w-9 place-items-center rounded-2xl bg-brand-700 text-lg font-bold text-white">ف</span>
         <div>
-          <p className="text-sm font-bold leading-tight">نسيم</p>
+          <p className="text-sm font-bold leading-tight">فنجان</p>
           <p className="text-[11px] text-muted leading-tight">لوحة التحكم</p>
         </div>
       </div>

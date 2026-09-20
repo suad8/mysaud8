@@ -60,7 +60,7 @@ export default async function AdminOrderDetailPage({ params }: Props) {
               {order.items.map((item) => (
                 <li key={item.id} className="flex items-center gap-4 px-5 py-4">
                   <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-[var(--surface-sunken)]">
-                    <Image src={item.imageUrl ?? "/products/box.svg"} alt="" fill sizes="56px" className="object-cover" />
+                    <Image src={item.imageUrl ?? "/products/placeholder.svg"} alt="" fill sizes="56px" className="object-cover" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{item.nameAr}</p>

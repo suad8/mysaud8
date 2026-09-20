@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="800" height="800" role="img" aria-label="ceremonial-matcha">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2f5d33"/><stop offset="1" stop-color="#8fc46a"/>
+    </linearGradient>
+    <radialGradient id="h" cx="0.3" cy="0.2" r="0.9">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.3"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="200" height="200" fill="url(#g)"/>
+  <rect width="200" height="200" fill="url(#h)"/>
+  <g fill="none" stroke="#fff" stroke-opacity="0.75" stroke-width="5" stroke-linejoin="round"><rect x="58" y="66" width="84" height="112" rx="10" />
+        <path d="M58 96h84" />
+        <rect x="82" y="40" width="36" height="26" rx="4" />
+        <path d="M76 128h48M76 144h32" stroke-linecap="round" /></g>
+</svg>

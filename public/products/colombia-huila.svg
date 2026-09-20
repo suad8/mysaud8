@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="800" height="800" role="img" aria-label="colombia-huila">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7a5230"/><stop offset="1" stop-color="#e3c194"/>
+    </linearGradient>
+    <radialGradient id="h" cx="0.3" cy="0.2" r="0.9">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.3"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="200" height="200" fill="url(#g)"/>
+  <rect width="200" height="200" fill="url(#h)"/>
+  <g fill="none" stroke="#fff" stroke-opacity="0.75" stroke-width="5" stroke-linejoin="round"><path d="M70 60l6-24c2-8 9-13 17-13h14c8 0 15 5 17 13l6 24" />
+        <path d="M56 60h88l8 106c1 10-7 18-17 18H65c-10 0-18-8-17-18z" />
+        <path d="M84 84c6 6 6 12 0 18M100 84c6 6 6 12 0 18M116 84c6 6 6 12 0 18" stroke-linecap="round" /></g>
+</svg>
