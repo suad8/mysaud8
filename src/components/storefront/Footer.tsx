@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { StoreLogo } from "@/components/StoreLogo";
+import { getStoreInfoSettings } from "@/server/settings";
 
 const COLUMNS = [
   { title: "المتجر", links: [["كل المنتجات", "/c/coffee-beans"], ["الماتشا", "/c/matcha"], ["أدوات التحضير", "/c/brewing"], ["الهدايا", "/c/gifts"]] },
@@ -6,7 +8,9 @@ const COLUMNS = [
   { title: "عن فنجان", links: [["قصتنا", "/"], ["دليل التحضير", "/"], ["سياسة الخصوصية", "/"], ["الشروط والأحكام", "/"]] },
 ] as const;
 
-export function Footer() {
+export async function Footer() {
+  const storeInfo = await getStoreInfoSettings();
+
   return (
     <footer className="relative mt-20 overflow-hidden border-t bg-[var(--surface-raised)]">
       <div
@@ -36,11 +40,11 @@ export function Footer() {
         <div className="mt-14 grid gap-10 md:grid-cols-2 lg:grid-cols-5">
           <div className="lg:col-span-2">
             <div className="flex items-center gap-2.5">
-              <span className="grid h-9 w-9 place-items-center rounded-2xl bg-brand-700 text-lg font-bold text-white">ف</span>
-              <span className="text-lg font-bold">فنجان</span>
+              <StoreLogo name={storeInfo.name} logoUrl={storeInfo.logoUrl} size={36} />
+              <span className="text-lg font-bold">{storeInfo.name}</span>
             </div>
             <p className="mt-4 max-w-sm text-sm leading-relaxed text-muted">
-              قهوة مختصة تُحمَّص طازجة وماتشا يابانية فاخرة، مع أدوات تحضير مختارة بعناية — من الرياض إلى بابك في كل مدن المملكة.
+              {storeInfo.tagline || "قهوة مختصة تُحمَّص طازجة وماتشا يابانية فاخرة، مع أدوات تحضير مختارة بعناية — من الرياض إلى بابك في كل مدن المملكة."}
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
               {["مدى", "Apple Pay", "فيزا", "ماستركارد", "تابي"].map((m) => (
@@ -68,7 +72,7 @@ export function Footer() {
         </div>
 
         <div className="mt-12 flex flex-col gap-3 border-t pt-6 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
-          <p>© <span className="num">2026</span> فنجان. جميع الحقوق محفوظة.</p>
+          <p>© <span className="num">2026</span> {storeInfo.name}. جميع الحقوق محفوظة.</p>
           <p>الأسعار تشمل ضريبة القيمة المضافة <span className="num">15%</span> · س.ت <span className="num">1010000000</span></p>
         </div>
       </div>

@@ -19,21 +19,21 @@ const securityHeaders = [
   // يمنع مواقع أخرى من تضمين موارد هذا الموقع مباشرة (صور، سكربتات...)
   { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
   /**
-   * CSP: كل الموارد (سكربت/تنسيق/صور/خطوط) مُستضافة محلياً حالياً — لا
-   * تحميل من أي نطاق خارجي (لا CDN، لا خطوط جوجل، لا سكربتات تحليلات).
-   * 'unsafe-inline' مطلوب لسكربتات Next.js التمهيدية (hydration data) لأنها
-   * غير مُوقَّعة بـ nonce في هذا الإعداد. عند ربط ودجت دفع خارجي (Moyasar)
-   * لاحقاً يجب إضافة نطاقه صراحة هنا بدل توسيع القاعدة العامة.
+   * CSP: كل الموارد محلية عدا نطاقات Google Analytics/Tag Manager المصرَّح
+   * بها صراحة (تُستخدَم فقط عند تفعيلها من الإعدادات — انظر src/app/layout.tsx).
+   * 'unsafe-inline' مطلوب لسكربتات Next.js التمهيدية (hydration data) وسكربتات
+   * gtag/GTM التي تُحقَن كنص inline لأنها غير مُوقَّعة بـ nonce في هذا الإعداد.
+   * عند ربط ودجت دفع خارجي (Moyasar) لاحقاً يجب إضافة نطاقه صراحة هنا.
    */
   {
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'",
+      "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob:",
+      "img-src 'self' data: blob: https://www.google-analytics.com https://www.googletagmanager.com",
       "font-src 'self' data:",
-      "connect-src 'self'",
+      "connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://*.google-analytics.com https://www.googletagmanager.com",
       "frame-ancestors 'none'",
       "object-src 'none'",
       "base-uri 'self'",

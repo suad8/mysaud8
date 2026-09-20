@@ -25,6 +25,7 @@ const ACTION_LABEL: Record<string, string> = {
   "settings.gateway.updated": "تحديث إعدادات بوابة الدفع",
   "settings.storeInfo.updated": "تحديث بيانات المتجر",
   "settings.hero.updated": "تحديث بانر الصفحة الرئيسية",
+  "settings.seoMarketing.updated": "تحديث إعدادات قوقل والتسويق",
   "coupon.created": "إنشاء كوبون",
   "coupon.toggled": "تفعيل/تعطيل كوبون",
   "coupon.deleted": "حذف كوبون",

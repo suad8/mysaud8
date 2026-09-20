@@ -1,14 +1,19 @@
 import Link from "next/link";
 import { db } from "@/server/db";
+import { StoreLogo } from "@/components/StoreLogo";
+import { getStoreInfoSettings } from "@/server/settings";
 
 const ICON = "h-5 w-5 stroke-current";
 
 export async function Header() {
-  const categories = await db.category.findMany({
-    where: { isActive: true, parentId: null },
-    orderBy: { position: "asc" },
-    select: { slug: true, nameAr: true },
-  });
+  const [categories, storeInfo] = await Promise.all([
+    db.category.findMany({
+      where: { isActive: true, parentId: null },
+      orderBy: { position: "asc" },
+      select: { slug: true, nameAr: true },
+    }),
+    getStoreInfoSettings(),
+  ]);
 
   return (
     <header className="sticky top-0 z-40 border-b bg-[var(--surface-raised)]/85 backdrop-blur-md">
@@ -21,10 +26,8 @@ export async function Header() {
 
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4">
         <Link href="/" className="flex shrink-0 items-center gap-2.5">
-          <span className="grid h-9 w-9 place-items-center rounded-2xl bg-brand-700 text-lg font-bold text-white">
-            ف
-          </span>
-          <span className="hidden text-lg font-bold tracking-tight sm:block">فنجان</span>
+          <StoreLogo name={storeInfo.name} logoUrl={storeInfo.logoUrl} size={36} />
+          <span className="hidden text-lg font-bold tracking-tight sm:block">{storeInfo.name}</span>
         </Link>
 
         <nav className="hidden flex-1 items-center gap-1 lg:flex">

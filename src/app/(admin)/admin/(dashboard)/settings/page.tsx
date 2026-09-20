@@ -5,12 +5,13 @@ import { HeroBannerForm } from "@/components/admin/HeroBannerForm";
 import { StoreInfoForm } from "@/components/admin/StoreInfoForm";
 import { ChangePasswordForm } from "@/components/admin/ChangePasswordForm";
 import { AdminUsersManager } from "@/components/admin/AdminUsersManager";
+import { SeoMarketingForm } from "@/components/admin/SeoMarketingForm";
 import { db } from "@/server/db";
 import { getSession } from "@/server/auth/session";
 import { AdminRole } from "@prisma/client";
-import { getBankTransferSettings, getHeroContent, getMoyasarSettings, getStoreInfoSettings, maskSecret } from "@/server/settings";
+import { getBankTransferSettings, getHeroContent, getMoyasarSettings, getSeoMarketingSettings, getStoreInfoSettings, maskSecret } from "@/server/settings";
 import { updateBankSettingsAction, updateGatewaySettingsAction } from "@/server/settings/actions";
-import { CURRENCY, TAX_RATE } from "@/lib/constants";
+import { CURRENCY, SITE_URL, TAX_RATE } from "@/lib/constants";
 
 const CURRENCY_LABEL = CURRENCY === "SAR" ? "ريال سعودي (SAR)" : CURRENCY;
 
@@ -64,11 +65,12 @@ export default async function AdminSettingsPage() {
   const session = await getSession();
   if (!session) redirect("/admin/login");
 
-  const [bank, gateway, storeInfo, hero, users] = await Promise.all([
+  const [bank, gateway, storeInfo, hero, seo, users] = await Promise.all([
     getBankTransferSettings(),
     getMoyasarSettings(),
     getStoreInfoSettings(),
     getHeroContent(),
+    getSeoMarketingSettings(),
     db.adminUser.findMany({
       orderBy: { lastLoginAt: "desc" },
       select: { id: true, name: true, email: true, role: true, isActive: true, lastLoginAt: true },
@@ -102,6 +104,10 @@ export default async function AdminSettingsPage() {
 
         <Section title="تغيير كلمة المرور" desc="لحسابك الحالي فقط.">
           <ChangePasswordForm />
+        </Section>
+
+        <Section title="أدوات قوقل والتسويق" desc="تحليلات الزيارات وتحسين الظهور في نتائج بحث قوقل ومتجر قوقل.">
+          <SeoMarketingForm seo={seo} siteUrl={SITE_URL} />
         </Section>
 
         {/* ── التحويل البنكي: قسم فعّال يحفظ في قاعدة البيانات ويظهر مباشرة في صفحة الدفع ── */}

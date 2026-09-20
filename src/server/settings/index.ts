@@ -69,6 +69,8 @@ export type StoreInfoSettings = {
   tagline: string;
   phone: string;
   email: string;
+  /** شعار المتجر — فارغ يعني استخدام شارة الحرف الأول الافتراضية */
+  logoUrl: string;
 };
 
 const STORE_INFO_DEFAULTS: StoreInfoSettings = {
@@ -76,6 +78,7 @@ const STORE_INFO_DEFAULTS: StoreInfoSettings = {
   tagline: "قهوة مختصة وماتشا فاخرة",
   phone: "",
   email: "",
+  logoUrl: "",
 };
 
 export function getStoreInfoSettings() {
@@ -125,4 +128,28 @@ export function maskSecret(secret: string): string {
   if (!secret) return "";
   if (secret.length <= 4) return "••••";
   return `••••••••${secret.slice(-4)}`;
+}
+
+/** أدوات قوقل للتسويق وتحسين الظهور — كل حقل اختياري، فارغ يعني غير مفعَّل. */
+export type SeoMarketingSettings = {
+  /** معرّف قياس Google Analytics 4 — يبدأ بـ G- */
+  googleAnalyticsId: string;
+  /** محتوى وسم التحقق من ملكية الموقع في Google Search Console (طريقة HTML tag) */
+  googleSearchConsoleVerification: string;
+  /** معرّف حاوية Google Tag Manager — يبدأ بـ GTM- (اختياري، بديل/إضافة لـ GA مباشر) */
+  googleTagManagerId: string;
+};
+
+const SEO_MARKETING_DEFAULTS: SeoMarketingSettings = {
+  googleAnalyticsId: "",
+  googleSearchConsoleVerification: "",
+  googleTagManagerId: "",
+};
+
+export function getSeoMarketingSettings() {
+  return getSetting<SeoMarketingSettings>("marketing.google", SEO_MARKETING_DEFAULTS);
+}
+
+export function saveSeoMarketingSettings(value: SeoMarketingSettings) {
+  return setSetting("marketing.google", value);
 }

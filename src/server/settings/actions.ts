@@ -7,9 +7,11 @@ import { saveUploadedFile, UploadError } from "@/lib/uploads";
 import {
   getHeroContent,
   getMoyasarSettings,
+  getStoreInfoSettings,
   saveBankTransferSettings,
   saveHeroContent,
   saveMoyasarSettings,
+  saveSeoMarketingSettings,
   saveStoreInfoSettings,
 } from "@/server/settings";
 
@@ -58,11 +60,25 @@ export async function updateStoreInfoAction(
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return { error: "اسم المتجر مطلوب" };
 
+  const current = await getStoreInfoSettings();
+  let logoUrl = current.logoUrl;
+  const logoFile = formData.get("logo");
+  if (logoFile instanceof File && logoFile.size > 0) {
+    try {
+      logoUrl = await saveUploadedFile(logoFile, "branding");
+    } catch (e) {
+      return { error: e instanceof UploadError ? e.message : "تعذّر رفع الشعار" };
+    }
+  } else if (formData.get("removeLogo") === "on") {
+    logoUrl = "";
+  }
+
   await saveStoreInfoSettings({
     name,
     tagline: String(formData.get("tagline") ?? "").trim(),
     phone: String(formData.get("phone") ?? "").trim(),
     email: String(formData.get("email") ?? "").trim(),
+    logoUrl,
   });
   await logAudit({ actorId: session.sub, action: "settings.storeInfo.updated", entity: "Setting", entityId: "store.info" });
 
@@ -106,5 +122,36 @@ export async function updateHeroContentAction(
 
   revalidatePath("/admin/settings");
   revalidatePath("/");
+  return {};
+}
+
+const GA_ID_PATTERN = /^G-[A-Z0-9]{6,12}$/;
+const GTM_ID_PATTERN = /^GTM-[A-Z0-9]{4,10}$/;
+
+export async function updateSeoMarketingAction(
+  _prevState: SettingsFormState,
+  formData: FormData,
+): Promise<SettingsFormState> {
+  const session = await requireAdmin();
+
+  const googleAnalyticsId = String(formData.get("googleAnalyticsId") ?? "").trim();
+  if (googleAnalyticsId && !GA_ID_PATTERN.test(googleAnalyticsId)) {
+    return { error: "معرّف Google Analytics غير صالح — يجب أن يبدأ بـ G- (مثال: G-ABC1234567)" };
+  }
+
+  const googleTagManagerId = String(formData.get("googleTagManagerId") ?? "").trim();
+  if (googleTagManagerId && !GTM_ID_PATTERN.test(googleTagManagerId)) {
+    return { error: "معرّف Google Tag Manager غير صالح — يجب أن يبدأ بـ GTM- (مثال: GTM-ABCD123)" };
+  }
+
+  await saveSeoMarketingSettings({
+    googleAnalyticsId,
+    googleTagManagerId,
+    googleSearchConsoleVerification: String(formData.get("googleSearchConsoleVerification") ?? "").trim(),
+  });
+  await logAudit({ actorId: session.sub, action: "settings.seoMarketing.updated", entity: "Setting", entityId: "marketing.google" });
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/", "layout");
   return {};
 }

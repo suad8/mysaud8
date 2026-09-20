@@ -12,8 +12,10 @@ import {
   getPromoProduct,
   getTestimonials,
 } from "@/server/catalog/queries";
-import { getHeroContent } from "@/server/settings";
+import { getHeroContent, getStoreInfoSettings } from "@/server/settings";
 import { formatNumber } from "@/lib/format";
+import { toJsonLd } from "@/lib/json-ld";
+import { SITE_URL } from "@/lib/constants";
 
 type CardDisplay = { slug: string; nameAr: string; imageUrl: string; price: number; rating: number };
 
@@ -31,7 +33,7 @@ const TRUST = [
 const AVATAR_COLORS = ["bg-brand-500", "bg-accent-500", "bg-brand-300"];
 
 export default async function HomePage() {
-  const [featured, arrivals, categories, testimonials, bundle, productCount, hero] = await Promise.all([
+  const [featured, arrivals, categories, testimonials, bundle, productCount, hero, storeInfo] = await Promise.all([
     getFeaturedProducts(8),
     getNewArrivals(4),
     getCategories(),
@@ -39,7 +41,24 @@ export default async function HomePage() {
     getPromoProduct(),
     getActiveProductCount(),
     getHeroContent(),
+    getStoreInfoSettings(),
   ]);
+
+  const organizationJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: storeInfo.name,
+    description: storeInfo.tagline || undefined,
+    url: SITE_URL,
+    logo: storeInfo.logoUrl ? `${SITE_URL}${storeInfo.logoUrl}` : undefined,
+  };
+
+  const websiteJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: storeInfo.name,
+    url: SITE_URL,
+  };
 
   // صورة البانر والبطاقة العائمة تُختاران من الكتالوج الفعلي (المميّز ثم الأحدث)
   // بدل الاعتماد على منتجات محدَّدة سلفاً قد لا تكون موجودة في متجر حقيقي.
@@ -53,6 +72,9 @@ export default async function HomePage() {
 
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: toJsonLd(organizationJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: toJsonLd(websiteJsonLd) }} />
+
       {/* ── البانر الرئيسي ─────────────────────────────────── */}
       <section className="relative overflow-hidden bg-brand-50 dark:bg-ink-950">
         <div aria-hidden className="blob -end-32 -top-40 h-96 w-96 bg-brand-100 dark:bg-brand-950/60" />

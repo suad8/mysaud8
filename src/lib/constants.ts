@@ -1,6 +1,8 @@
 export const STORE_NAME = process.env.NEXT_PUBLIC_STORE_NAME ?? "فنجان";
 export const CURRENCY = process.env.NEXT_PUBLIC_CURRENCY ?? "SAR";
 export const TAX_RATE = Number(process.env.TAX_RATE ?? "0.15");
+/** رابط الموقع الأساسي بلا / زائدة — يُستخدم في السايت ماب وروبوتس والبيانات المهيكلة وتغذية قوقل. */
+export const SITE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
 /** حالات الطلب بأسمائها العربية وألوان الشارات. */
 export const ORDER_STATUS = {

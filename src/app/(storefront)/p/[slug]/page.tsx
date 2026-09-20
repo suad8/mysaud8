@@ -8,19 +8,70 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ProductCard } from "@/components/storefront/ProductCard";
 import { getProductBySlug, getRelatedProducts } from "@/server/catalog/queries";
+import { getStoreInfoSettings } from "@/server/settings";
 import { formatDate } from "@/lib/format";
+import { toJsonLd } from "@/lib/json-ld";
+import { CURRENCY, SITE_URL } from "@/lib/constants";
 
 type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const product = await getProductBySlug(slug);
-  return { title: product?.metaTitle ?? product?.nameAr ?? "منتج", description: product?.metaDesc ?? undefined };
+  if (!product) return { title: "منتج" };
+
+  const title = product.metaTitle ?? product.nameAr;
+  const description = product.metaDesc ?? product.shortDescAr ?? undefined;
+  const image = product.images[0]?.url;
+
+  return {
+    title,
+    description,
+    alternates: { canonical: `${SITE_URL}/p/${slug}` },
+    openGraph: { title, description, images: image ? [{ url: image }] : undefined },
+  };
+}
+
+/** بيانات Product المهيكلة (Schema.org) — أساس ظهور المنتج بنتائج غنية وGoogle Shopping. */
+function buildProductJsonLd(
+  product: NonNullable<Awaited<ReturnType<typeof getProductBySlug>>>,
+  storeName: string,
+  totalAvailable: number,
+) {
+  const variant = product.variants[0];
+  const price = variant?.price ?? product.basePrice;
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.nameAr,
+    description: product.shortDescAr ?? product.descAr ?? undefined,
+    image: product.images.map((i) => `${SITE_URL}${i.url}`),
+    sku: variant?.sku,
+    brand: { "@type": "Brand", name: storeName },
+    offers: {
+      "@type": "Offer",
+      url: `${SITE_URL}/p/${product.slug}`,
+      priceCurrency: CURRENCY,
+      price: price.toFixed(2),
+      availability: totalAvailable > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+      itemCondition: "https://schema.org/NewCondition",
+    },
+    ...(product.reviewCount > 0
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: product.rating.toFixed(1),
+            reviewCount: product.reviewCount,
+          },
+        }
+      : {}),
+  };
 }
 
 export default async function ProductPage({ params }: Props) {
   const { slug } = await params;
-  const product = await getProductBySlug(slug);
+  const [product, storeInfo] = await Promise.all([getProductBySlug(slug), getStoreInfoSettings()]);
   if (!product) notFound();
 
   const related = await getRelatedProducts(product.categoryId, slug);
@@ -28,7 +79,12 @@ export default async function ProductPage({ params }: Props) {
   const hasVariants = product.variants.length > 1;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8">
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: toJsonLd(buildProductJsonLd(product, storeInfo.name, totalAvailable)) }}
+      />
+      <div className="mx-auto max-w-7xl px-4 py-8">
       <nav className="flex flex-wrap items-center gap-2 text-xs text-muted">
         <Link href="/" className="hover:text-[var(--text-strong)]">الرئيسية</Link>
         <span>/</span>
@@ -163,6 +219,7 @@ export default async function ProductPage({ params }: Props) {
           </div>
         </section>
       )}
-    </div>
+      </div>
+    </>
   );
 }

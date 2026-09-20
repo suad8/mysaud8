@@ -7,13 +7,15 @@ import { cn } from "@/lib/cn";
 import { ADMIN_NAV } from "@/components/admin/nav";
 import { ADMIN_ROLE_LABEL } from "@/lib/constants";
 import { logoutAction } from "@/server/auth/actions";
+import { StoreLogo } from "@/components/StoreLogo";
 import type { SessionPayload } from "@/server/auth/session";
+import type { StoreInfoSettings } from "@/server/settings";
 
 /**
  * تنقّل لوحة التحكم على الجوال: زر همبرغر عائم + قائمة منسدلة من الجانب.
  * الشريط الجانبي الثابت (Sidebar.tsx) مخفي تحت lg، فهذا المكوّن يعوّضه.
  */
-export function MobileSidebar({ session }: { session: SessionPayload }) {
+export function MobileSidebar({ session, storeInfo }: { session: SessionPayload; storeInfo: StoreInfoSettings }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -68,9 +70,9 @@ export function MobileSidebar({ session }: { session: SessionPayload }) {
       >
         <div className="flex h-16 items-center justify-between gap-2.5 border-b px-5">
           <div className="flex items-center gap-2.5">
-            <span className="grid h-9 w-9 place-items-center rounded-2xl bg-brand-700 text-lg font-bold text-white">ف</span>
+            <StoreLogo name={storeInfo.name} logoUrl={storeInfo.logoUrl} size={36} />
             <div>
-              <p className="text-sm font-bold leading-tight">فنجان</p>
+              <p className="text-sm font-bold leading-tight">{storeInfo.name}</p>
               <p className="text-[11px] text-muted leading-tight">لوحة التحكم</p>
             </div>
           </div>
