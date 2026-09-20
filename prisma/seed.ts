@@ -221,6 +221,20 @@ async function main() {
       { key: "store.tagline", value: "قهوة مختصة وماتشا فاخرة" },
       { key: "tax.rate", value: 0.15 },
       { key: "shipping.freeAbove", value: 200 },
+      {
+        key: "payment.bankTransfer",
+        value: {
+          enabled: true,
+          bankName: "البنك الأهلي السعودي",
+          accountName: "شركة فنجان للتجارة",
+          iban: "SA44 2000 0001 2345 6789 1234",
+          accountNumber: "12345678901234",
+        },
+      },
+      {
+        key: "payment.moyasar",
+        value: { enabled: false, publishableKey: "", secretKey: "" },
+      },
     ],
   });
 

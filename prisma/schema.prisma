@@ -370,6 +370,8 @@ model Payment {
   /// رد البوابة الخام — للتدقيق عند النزاعات
   rawResponse Json?
   failureReason String?
+  /// رابط إيصال التحويل البنكي المرفوع من العميل (لطريقة الدفع BANK_TRANSFER)
+  receiptUrl  String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 

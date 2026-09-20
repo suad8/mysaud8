@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { db } from "@/server/db";
 import { ORDER_STATUS, PAYMENT_METHOD_LABEL, type OrderStatusKey } from "@/lib/constants";
 import { formatDateTime } from "@/lib/format";
+import { confirmBankPaymentAction, rejectBankPaymentAction } from "@/server/orders/actions";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -124,14 +125,50 @@ export default async function AdminOrderDetailPage({ params }: Props) {
             {order.payments.length === 0 ? (
               <p className="mt-3 text-sm text-muted">لم يتم الدفع بعد</p>
             ) : (
-              order.payments.map((p) => (
-                <div key={p.id} className="mt-3 flex items-center justify-between text-sm">
-                  <span>{PAYMENT_METHOD_LABEL[p.method] ?? p.method}</span>
-                  <Badge tone={p.status === "CAPTURED" ? "green" : "amber"}>
-                    {p.status === "CAPTURED" ? "مكتمل" : p.status}
-                  </Badge>
-                </div>
-              ))
+              order.payments.map((p) => {
+                const pendingReview = p.method === "BANK_TRANSFER" && p.status === "INITIATED";
+                const tone = p.status === "CAPTURED" ? "green" : p.status === "FAILED" ? "red" : "amber";
+                const label =
+                  p.status === "CAPTURED" ? "مكتمل" : pendingReview ? "بانتظار المراجعة" : p.status === "FAILED" ? "مرفوض" : p.status;
+
+                return (
+                  <div key={p.id} className="mt-3 border-t pt-3 first:border-t-0 first:pt-0">
+                    <div className="flex items-center justify-between text-sm">
+                      <span>{PAYMENT_METHOD_LABEL[p.method] ?? p.method}</span>
+                      <Badge tone={tone}>{label}</Badge>
+                    </div>
+                    {p.failureReason && (
+                      <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">سبب الرفض: {p.failureReason}</p>
+                    )}
+
+                    {p.receiptUrl && (
+                      <div className="mt-3">
+                        <p className="mb-1.5 text-xs font-medium text-muted">إيصال التحويل</p>
+                        {p.receiptUrl.endsWith(".pdf") ? (
+                          <a href={p.receiptUrl} target="_blank" rel="noreferrer" className="inline-block text-xs font-medium text-brand-700 hover:underline">
+                            عرض ملف PDF ↗
+                          </a>
+                        ) : (
+                          <a href={p.receiptUrl} target="_blank" rel="noreferrer" className="relative block h-40 w-full overflow-hidden rounded-lg bg-[var(--surface-sunken)]">
+                            <Image src={p.receiptUrl} alt="إيصال التحويل" fill sizes="320px" className="object-contain" />
+                          </a>
+                        )}
+                      </div>
+                    )}
+
+                    {pendingReview && (
+                      <div className="mt-3 flex gap-2">
+                        <form action={confirmBankPaymentAction.bind(null, order.id)}>
+                          <Button size="sm">تأكيد الدفع</Button>
+                        </form>
+                        <form action={rejectBankPaymentAction.bind(null, order.id)}>
+                          <Button variant="danger" size="sm">رفض الإيصال</Button>
+                        </form>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </section>
 

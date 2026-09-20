@@ -13,3 +13,7 @@ coverage/
 next-env.d.ts
 *.tsbuildinfo
 /prisma/dev.db*
+
+# ملفات مرفوعة من المستخدمين (إيصالات التحويل البنكي) — بيانات وقت التشغيل فقط
+/public/uploads/**
+!/public/uploads/**/.gitkeep
