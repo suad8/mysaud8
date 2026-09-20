@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="800" height="800" role="img" aria-label="dripper">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#463f38"/><stop offset="1" stop-color="#d3cdc2"/>
+    </linearGradient>
+    <radialGradient id="h" cx="0.3" cy="0.2" r="0.9">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="200" height="200" fill="url(#g)"/>
+  <rect width="200" height="200" fill="url(#h)"/>
+  <g fill="none" stroke="#fff" stroke-opacity="0.72" stroke-width="5" stroke-linejoin="round"><path d="M56 74h76v52c0 18-15 32-33 32h-10c-18 0-33-14-33-32V74z"/><path d="M132 86h14c9 0 16 7 16 16s-7 16-16 16h-14"/><path d="M52 172h84" stroke-linecap="round"/><path d="M80 40c0 8-8 10-8 18M100 36c0 8-8 10-8 18" stroke-linecap="round"/></g>
+</svg>

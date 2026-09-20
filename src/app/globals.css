@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+/* الوضع الداكن يُفعَّل بإضافة class="dark" على <html> */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* ── الخطوط ─────────────────────────────────────────────── */
+  --font-sans: var(--font-arabic), ui-sans-serif, system-ui, sans-serif;
+
+  /* ── هوية العلامة: أخضر عميق ─────────────────────────────── */
+  --color-brand-50:  #ecfdf7;
+  --color-brand-100: #d1fae9;
+  --color-brand-200: #a7f3d4;
+  --color-brand-300: #6ee7ba;
+  --color-brand-400: #34d39c;
+  --color-brand-500: #14a97c;
+  --color-brand-600: #0d8768;
+  --color-brand-700: #0e6b55;
+  --color-brand-800: #105545;
+  --color-brand-900: #0f4639;
+  --color-brand-950: #042f25;
+
+  /* ── لون مساند: ذهبي دافئ ───────────────────────────────── */
+  --color-gold-50:  #fdf9ed;
+  --color-gold-100: #faf0cd;
+  --color-gold-200: #f4df9c;
+  --color-gold-300: #ecc763;
+  --color-gold-400: #e5b13c;
+  --color-gold-500: #d4a544;
+  --color-gold-600: #b8801f;
+  --color-gold-700: #935f1c;
+  --color-gold-800: #7a4c1e;
+  --color-gold-900: #683f1d;
+
+  /* ── رماديات دافئة ──────────────────────────────────────── */
+  --color-ink-50:  #faf9f7;
+  --color-ink-100: #f2f0ec;
+  --color-ink-200: #e6e2db;
+  --color-ink-300: #d3cdc2;
+  --color-ink-400: #a9a196;
+  --color-ink-500: #7d756a;
+  --color-ink-600: #5e564d;
+  --color-ink-700: #463f38;
+  --color-ink-800: #2b2621;
+  --color-ink-900: #1a1613;
+  --color-ink-950: #100d0b;
+
+  /* ── الزوايا والظلال ────────────────────────────────────── */
+  --radius-card: 1rem;
+  --shadow-soft: 0 1px 2px rgb(16 13 11 / 0.04), 0 8px 24px -12px rgb(16 13 11 / 0.12);
+  --shadow-lift: 0 2px 4px rgb(16 13 11 / 0.05), 0 16px 40px -16px rgb(16 13 11 / 0.2);
+}
+
+/* ── متغيّرات دلالية تتبدّل بين الفاتح والداكن ───────────────── */
+:root {
+  --surface:        var(--color-ink-50);
+  --surface-raised: #ffffff;
+  --surface-sunken: var(--color-ink-100);
+  --border-subtle:  var(--color-ink-200);
+  --text-strong:    var(--color-ink-900);
+  --text-muted:     var(--color-ink-500);
+}
+
+.dark {
+  --surface:        var(--color-ink-950);
+  --surface-raised: var(--color-ink-900);
+  --surface-sunken: #080706;
+  --border-subtle:  var(--color-ink-800);
+  --text-strong:    var(--color-ink-50);
+  --text-muted:     var(--color-ink-400);
+}
+
+@layer base {
+  * {
+    border-color: var(--border-subtle);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--surface);
+    color: var(--text-strong);
+    font-feature-settings: "ss01", "cv01";
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* الأرقام العربية الشرقية تصعّب قراءة الأسعار — نثبّت اللاتينية */
+  .num {
+    font-variant-numeric: tabular-nums;
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .surface-card {
+    background-color: var(--surface-raised);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-card);
+  }
+
+  .text-muted {
+    color: var(--text-muted);
+  }
+
+  /* شريط تمرير أنحف للقوائم الأفقية */
+  .scroll-x {
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scroll-snap-type: x mandatory;
+  }
+  .scroll-x > * {
+    scroll-snap-align: start;
+  }
+}
