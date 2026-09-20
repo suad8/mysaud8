@@ -2,29 +2,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Price } from "@/components/ui/Price";
-import { db } from "@/server/db";
 import { calculateTotals } from "@/server/cart/pricing";
-
-// عرض توضيحي لتصميم السلة — يُستبدل بسلة حقيقية مرتبطة بالجلسة في المرحلة ٣.
-async function getDemoCartLines() {
-  const variants = await db.productVariant.findMany({
-    take: 2,
-    include: { product: { include: { images: { take: 1, orderBy: { position: "asc" } } } } },
-    orderBy: { createdAt: "asc" },
-  });
-  return variants.map((v, i) => ({
-    variantId: v.id,
-    nameAr: v.product.nameAr,
-    optionsLabel: Object.values(v.options as Record<string, string>).join(" · "),
-    imageUrl: v.product.images[0]?.url ?? "/products/placeholder.svg",
-    slug: v.product.slug,
-    unitPrice: Number(v.price),
-    quantity: i === 0 ? 2 : 1,
-  }));
-}
+import { getCartLines } from "@/server/cart/queries";
+import { decrementCartItemAction, incrementCartItemAction, removeCartItemAction } from "@/server/cart/actions";
 
 export default async function CartPage() {
-  const lines = await getDemoCartLines();
+  const lines = await getCartLines();
   const totals = calculateTotals({ lines, shippingRate: 20, freeShippingAbove: 200 });
   const remainingForFreeShipping = Math.max(0, 200 - totals.subtotal);
 
@@ -51,7 +34,7 @@ export default async function CartPage() {
       <div className="mt-6 grid gap-8 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
           {lines.map((line) => (
-            <div key={line.variantId} className="surface-card flex gap-4 p-4">
+            <div key={line.itemId} className="surface-card flex gap-4 p-4">
               <Link href={`/p/${line.slug}`} className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-[var(--surface-sunken)]">
                 <Image src={line.imageUrl} alt={line.nameAr} fill sizes="96px" className="object-cover" />
               </Link>
@@ -60,14 +43,23 @@ export default async function CartPage() {
                   <div>
                     <Link href={`/p/${line.slug}`} className="text-sm font-semibold hover:underline">{line.nameAr}</Link>
                     {line.optionsLabel && <p className="mt-0.5 text-xs text-muted">{line.optionsLabel}</p>}
+                    {line.quantity > line.available && (
+                      <p className="mt-0.5 text-xs text-red-600">المتاح الآن {line.available} فقط</p>
+                    )}
                   </div>
-                  <button className="text-xs text-muted hover:text-red-600" aria-label="إزالة">إزالة</button>
+                  <form action={removeCartItemAction.bind(null, line.itemId)}>
+                    <button type="submit" className="text-xs text-muted hover:text-red-600" aria-label="إزالة">إزالة</button>
+                  </form>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex h-9 items-center rounded-lg border">
-                    <button className="w-9 text-muted" aria-label="إنقاص">−</button>
+                    <form action={decrementCartItemAction.bind(null, line.itemId)}>
+                      <button type="submit" className="w-9 text-muted" aria-label="إنقاص">−</button>
+                    </form>
                     <span className="num w-7 text-center text-sm">{line.quantity}</span>
-                    <button className="w-9 text-muted" aria-label="زيادة">+</button>
+                    <form action={incrementCartItemAction.bind(null, line.itemId)}>
+                      <button type="submit" disabled={line.quantity >= line.available} className="w-9 text-muted disabled:opacity-30" aria-label="زيادة">+</button>
+                    </form>
                   </div>
                   <Price value={line.unitPrice * line.quantity} />
                 </div>

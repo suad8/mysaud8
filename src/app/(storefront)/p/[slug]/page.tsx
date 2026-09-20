@@ -2,11 +2,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { Price } from "@/components/ui/Price";
 import { Rating } from "@/components/ui/Rating";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
 import { ProductCard } from "@/components/storefront/ProductCard";
+import { ProductPurchasePanel } from "@/components/storefront/ProductPurchasePanel";
 import { getProductBySlug, getRelatedProducts } from "@/server/catalog/queries";
 import { getStoreInfoSettings } from "@/server/settings";
 import { formatDate } from "@/lib/format";
@@ -76,7 +74,6 @@ export default async function ProductPage({ params }: Props) {
 
   const related = await getRelatedProducts(product.categoryId, slug);
   const totalAvailable = product.variants.reduce((s, v) => s + v.available, 0);
-  const hasVariants = product.variants.length > 1;
 
   return (
     <>
@@ -121,50 +118,20 @@ export default async function ProductPage({ params }: Props) {
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{product.nameAr}</h1>
           <div className="mt-3 flex items-center gap-3">
             <Rating value={product.rating} count={product.reviewCount} />
-            {totalAvailable > 0 ? (
-              <Badge tone="green">متوفر</Badge>
-            ) : (
-              <Badge tone="gray">نفد المخزون</Badge>
-            )}
-          </div>
-
-          <div className="mt-5">
-            <Price value={product.variants[0]?.price ?? product.basePrice} compareAt={product.variants[0]?.comparePrice ?? product.comparePrice} size="lg" />
-            <p className="mt-1 text-xs text-muted">شامل ضريبة القيمة المضافة</p>
           </div>
 
           {product.shortDescAr && <p className="mt-5 leading-relaxed text-muted">{product.shortDescAr}</p>}
 
-          {hasVariants && (
-            <div className="mt-6">
-              <h2 className="text-sm font-semibold">الخيار</h2>
-              <div className="mt-2.5 flex flex-wrap gap-2">
-                {product.variants.map((v, i) => (
-                  <button
-                    key={v.id}
-                    disabled={v.available <= 0}
-                    className={`rounded-xl border px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-                      i === 0
-                        ? "border-brand-600 bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300"
-                        : "hover:bg-ink-100 dark:hover:bg-ink-800"
-                    }`}
-                  >
-                    {v.nameAr}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="mt-7 flex items-center gap-3">
-            <div className="flex h-12 items-center rounded-xl border">
-              <button className="w-11 text-lg text-muted" aria-label="إنقاص الكمية">−</button>
-              <span className="num w-8 text-center text-sm font-medium">1</span>
-              <button className="w-11 text-lg text-muted" aria-label="زيادة الكمية">+</button>
-            </div>
-            <Button size="lg" className="flex-1" disabled={totalAvailable <= 0}>
-              {totalAvailable > 0 ? "أضف إلى السلة" : "نفد المخزون"}
-            </Button>
+          <div className="mt-5">
+            <ProductPurchasePanel
+              variants={product.variants.map((v) => ({
+                id: v.id,
+                nameAr: v.nameAr,
+                price: v.price,
+                comparePrice: v.comparePrice,
+                available: v.available,
+              }))}
+            />
           </div>
 
           <div className="mt-8 grid grid-cols-3 gap-3 border-t pt-6 text-center">

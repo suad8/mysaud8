@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/server/db";
 import { saveUploadedFile, UploadError } from "@/lib/uploads";
-import { createOrderFromCheckout } from "@/server/orders/create";
+import { createOrderFromCheckout, StockError } from "@/server/orders/create";
 import { requireAdmin } from "@/server/auth/session";
 import { logAudit } from "@/server/audit/log";
 import { getClientIp } from "@/lib/request-ip";
@@ -96,7 +96,11 @@ export async function createOrderAction(
       receiptUrl,
     });
     orderNumber = order.number;
-  } catch {
+  } catch (e) {
+    if (e instanceof StockError) return { error: e.message };
+    if (e instanceof Error && e.message === "السلة فارغة") {
+      return { error: "سلتك فارغة — أضف منتجات قبل إتمام الطلب." };
+    }
     return { error: "حدث خطأ أثناء إنشاء الطلب، يرجى المحاولة مرة أخرى." };
   }
 
@@ -133,17 +137,30 @@ export async function confirmBankPaymentAction(orderId: string, _formData: FormD
  */
 export async function rejectBankPaymentAction(orderId: string, formData: FormData) {
   const session = await requireAdmin();
-  const order = await db.order.findUnique({ where: { id: orderId }, include: { payments: true } });
+  const order = await db.order.findUnique({ where: { id: orderId }, include: { payments: true, items: true } });
   if (!order) return;
   const payment = order.payments.find((p) => p.method === "BANK_TRANSFER" && p.status === "INITIATED");
   if (!payment) return;
 
   const note = String(formData.get("reason") ?? "").trim() || "الإيصال غير واضح أو المبلغ غير مطابق";
 
-  await db.$transaction([
-    db.payment.update({ where: { id: payment.id }, data: { status: PaymentStatus.FAILED, failureReason: note } }),
-    db.orderEvent.create({ data: { orderId: order.id, message: `تم رفض إيصال التحويل: ${note}` } }),
-  ]);
+  await db.$transaction(async (tx) => {
+    await tx.payment.update({ where: { id: payment.id }, data: { status: PaymentStatus.FAILED, failureReason: note } });
+    await tx.orderEvent.create({ data: { orderId: order.id, message: `تم رفض إيصال التحويل: ${note}` } });
+
+    // إعادة المخزون المخصوم عند إنشاء الطلب — الدفع لم يكتمل فعلياً فلا يبقى محجوزاً
+    for (const item of order.items) {
+      if (!item.variantId) continue;
+      const inventory = await tx.inventoryItem.update({
+        where: { variantId: item.variantId },
+        data: { onHand: { increment: item.quantity } },
+        select: { id: true },
+      });
+      await tx.inventoryMovement.create({
+        data: { inventoryId: inventory.id, delta: item.quantity, reason: "استرجاع مخزون — رفض إيصال تحويل", reference: order.number },
+      });
+    }
+  });
   await logAudit({ actorId: session.sub, action: "payment.rejected", entity: "Order", entityId: order.id, diff: { reason: note } });
 
   revalidatePath(`/admin/orders/${orderId}`);

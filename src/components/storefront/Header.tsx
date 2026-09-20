@@ -2,17 +2,19 @@ import Link from "next/link";
 import { db } from "@/server/db";
 import { StoreLogo } from "@/components/StoreLogo";
 import { getStoreInfoSettings } from "@/server/settings";
+import { getCartItemCount } from "@/server/cart/queries";
 
 const ICON = "h-5 w-5 stroke-current";
 
 export async function Header() {
-  const [categories, storeInfo] = await Promise.all([
+  const [categories, storeInfo, cartCount] = await Promise.all([
     db.category.findMany({
       where: { isActive: true, parentId: null },
       orderBy: { position: "asc" },
       select: { slug: true, nameAr: true },
     }),
     getStoreInfoSettings(),
+    getCartItemCount(),
   ]);
 
   return (
@@ -65,9 +67,11 @@ export async function Header() {
               <path d="M4 6h16l-1.4 10.3a2 2 0 0 1-2 1.7H7.4a2 2 0 0 1-2-1.7Z" strokeLinejoin="round" />
               <path d="M9 10V6a3 3 0 0 1 6 0v4" strokeLinecap="round" />
             </svg>
-            <span className="num absolute -top-0.5 end-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-accent-500 px-1 text-[11px] font-bold text-white">
-              2
-            </span>
+            {cartCount > 0 && (
+              <span className="num absolute -top-0.5 end-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-accent-500 px-1 text-[11px] font-bold text-white">
+                {cartCount}
+              </span>
+            )}
           </Link>
         </div>
       </div>

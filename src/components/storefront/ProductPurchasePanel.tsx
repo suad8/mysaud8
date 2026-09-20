@@ -1,0 +1,105 @@
+"use client";
+
+import { useActionState, useMemo, useState } from "react";
+import { Price } from "@/components/ui/Price";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { addToCartAction } from "@/server/cart/actions";
+
+export type PurchaseVariant = {
+  id: string;
+  nameAr: string;
+  price: number;
+  comparePrice: number | null;
+  available: number;
+};
+
+export function ProductPurchasePanel({ variants }: { variants: PurchaseVariant[] }) {
+  const [state, formAction, isPending] = useActionState(addToCartAction, {});
+  const [selectedId, setSelectedId] = useState(variants[0]?.id ?? "");
+  const [quantity, setQuantity] = useState(1);
+
+  const selected = useMemo(() => variants.find((v) => v.id === selectedId) ?? variants[0], [variants, selectedId]);
+  const hasVariants = variants.length > 1;
+  const outOfStock = !selected || selected.available <= 0;
+
+  function selectVariant(id: string) {
+    setSelectedId(id);
+    setQuantity(1);
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-3">
+        {selected && selected.available > 0 ? (
+          <Badge tone="green">متوفر</Badge>
+        ) : (
+          <Badge tone="gray">نفد المخزون</Badge>
+        )}
+      </div>
+
+      <div className="mt-5">
+        <Price value={selected?.price ?? 0} compareAt={selected?.comparePrice} size="lg" />
+        <p className="mt-1 text-xs text-muted">شامل ضريبة القيمة المضافة</p>
+      </div>
+
+      {hasVariants && (
+        <div className="mt-6">
+          <h2 className="text-sm font-semibold">الخيار</h2>
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            {variants.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                disabled={v.available <= 0}
+                onClick={() => selectVariant(v.id)}
+                className={`rounded-xl border px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                  v.id === selectedId
+                    ? "border-brand-600 bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300"
+                    : "hover:bg-ink-100 dark:hover:bg-ink-800"
+                }`}
+              >
+                {v.nameAr}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <form action={formAction} className="mt-7">
+        <input type="hidden" name="variantId" value={selectedId} />
+        <input type="hidden" name="quantity" value={quantity} />
+
+        <div className="flex items-center gap-3">
+          <div className="flex h-12 items-center rounded-xl border">
+            <button
+              type="button"
+              onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+              disabled={outOfStock}
+              className="w-11 text-lg text-muted disabled:opacity-40"
+              aria-label="إنقاص الكمية"
+            >
+              −
+            </button>
+            <span className="num w-8 text-center text-sm font-medium">{quantity}</span>
+            <button
+              type="button"
+              onClick={() => setQuantity((q) => Math.min(selected?.available ?? 1, q + 1))}
+              disabled={outOfStock}
+              className="w-11 text-lg text-muted disabled:opacity-40"
+              aria-label="زيادة الكمية"
+            >
+              +
+            </button>
+          </div>
+          <Button type="submit" size="lg" className="flex-1" disabled={outOfStock || isPending}>
+            {outOfStock ? "نفد المخزون" : isPending ? "جارٍ الإضافة…" : "أضف إلى السلة"}
+          </Button>
+        </div>
+
+        {state.error && <p className="mt-2 text-sm text-red-600">{state.error}</p>}
+        {state.success && <p className="mt-2 text-sm font-medium text-emerald-600">تمت الإضافة إلى السلة ✓</p>}
+      </form>
+    </div>
+  );
+}

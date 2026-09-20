@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { calculateTotals } from "@/server/cart/pricing";
 import { getCheckoutLines } from "@/server/orders/create";
 import { getBankTransferSettings } from "@/server/settings";
@@ -10,6 +11,8 @@ const STEPS = [
 
 export default async function CheckoutPage() {
   const [lines, bankSettings] = await Promise.all([getCheckoutLines(), getBankTransferSettings()]);
+  if (lines.length === 0) redirect("/cart");
+
   const standardTotals = calculateTotals({ lines, shippingRate: 20, freeShippingAbove: 200 });
   const expressTotals = calculateTotals({ lines, shippingRate: 40, freeShippingAbove: null });
 
