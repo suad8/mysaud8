@@ -10,9 +10,21 @@ import { logAudit } from "@/server/audit/log";
 import { getClientIp } from "@/lib/request-ip";
 import { OrderStatus, PaymentStatus } from "@prisma/client";
 
+export type CheckoutContactValues = {
+  name?: string;
+  phone?: string;
+  email?: string;
+  city?: string;
+  district?: string;
+  street?: string;
+  notes?: string;
+};
+
 export type CheckoutFormState = {
   error?: string;
   fieldErrors?: Record<string, string>;
+  /** يعيد ما أدخله العميل عند فشل الإرسال — Next/React يفرّغ حقول النموذج تلقائياً بعد كل Server Action. */
+  values?: CheckoutContactValues;
 };
 
 const REQUIRED: [string, string][] = [
@@ -30,16 +42,29 @@ const orderAttempts = new Map<string, { count: number; windowStart: number }>();
 const MAX_ORDERS_PER_WINDOW = 5;
 const WINDOW_MS = 10 * 60 * 1000;
 
+function readContactValues(formData: FormData): CheckoutContactValues {
+  return {
+    name: String(formData.get("name") ?? ""),
+    phone: String(formData.get("phone") ?? ""),
+    email: String(formData.get("email") ?? ""),
+    city: String(formData.get("city") ?? ""),
+    district: String(formData.get("district") ?? ""),
+    street: String(formData.get("street") ?? ""),
+    notes: String(formData.get("notes") ?? ""),
+  };
+}
+
 export async function createOrderAction(
   _prevState: CheckoutFormState,
   formData: FormData,
 ): Promise<CheckoutFormState> {
+  const values = readContactValues(formData);
   const ip = (await getClientIp()) ?? "unknown";
   const now = Date.now();
   const record = orderAttempts.get(ip);
   if (record && now - record.windowStart < WINDOW_MS) {
     if (record.count >= MAX_ORDERS_PER_WINDOW) {
-      return { error: "عدد كبير من الطلبات خلال وقت قصير — يرجى المحاولة لاحقاً." };
+      return { error: "عدد كبير من الطلبات خلال وقت قصير — يرجى المحاولة لاحقاً.", values };
     }
     record.count += 1;
   } else {
@@ -53,7 +78,7 @@ export async function createOrderAction(
 
   const paymentMethod = formData.get("paymentMethod");
   if (paymentMethod !== "BANK_TRANSFER" && paymentMethod !== "COD") {
-    return { error: "طريقة الدفع المختارة غير متاحة حالياً — يرجى اختيار التحويل البنكي أو الدفع عند الاستلام." };
+    return { error: "طريقة الدفع المختارة غير متاحة حالياً — يرجى اختيار التحويل البنكي أو الدفع عند الاستلام.", values };
   }
 
   let receiptUrl: string | null = null;
@@ -74,7 +99,7 @@ export async function createOrderAction(
   }
 
   if (Object.keys(fieldErrors).length > 0) {
-    return { fieldErrors };
+    return { fieldErrors, values };
   }
 
   const shippingMethod = formData.get("shippingMethod") === "express" ? "express" : "standard";
@@ -97,11 +122,11 @@ export async function createOrderAction(
     });
     orderNumber = order.number;
   } catch (e) {
-    if (e instanceof StockError) return { error: e.message };
+    if (e instanceof StockError) return { error: e.message, values };
     if (e instanceof Error && e.message === "السلة فارغة") {
-      return { error: "سلتك فارغة — أضف منتجات قبل إتمام الطلب." };
+      return { error: "سلتك فارغة — أضف منتجات قبل إتمام الطلب.", values };
     }
-    return { error: "حدث خطأ أثناء إنشاء الطلب، يرجى المحاولة مرة أخرى." };
+    return { error: "حدث خطأ أثناء إنشاء الطلب، يرجى المحاولة مرة أخرى.", values };
   }
 
   redirect(`/order/${orderNumber}`);

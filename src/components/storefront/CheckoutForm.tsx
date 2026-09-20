@@ -20,6 +20,11 @@ const COMING_SOON: { key: PaymentKey; label: string; desc: string }[] = [
 
 const initialState: CheckoutFormState = {};
 
+const STEPS = [
+  { n: 1, label: "رقم الجوال" },
+  { n: 2, label: "بيانات التوصيل والدفع" },
+];
+
 export function CheckoutForm({
   lines,
   standardTotals,
@@ -36,6 +41,9 @@ export function CheckoutForm({
   const [payment, setPayment] = useState<PaymentKey>("BANK_TRANSFER");
   const [copied, setCopied] = useState<string | null>(null);
   const [receiptName, setReceiptName] = useState<string | null>(null);
+  const [step, setStep] = useState<1 | 2>(1);
+  const [phone, setPhone] = useState("");
+  const [phoneTouched, setPhoneTouched] = useState(false);
 
   const totals = shipping === "express" ? expressTotals : standardTotals;
 
@@ -47,11 +55,77 @@ export function CheckoutForm({
     });
   }
 
+  function goToDetails() {
+    if (!phone.trim()) {
+      setPhoneTouched(true);
+      return;
+    }
+    setStep(2);
+  }
+
   const err = (field: string) => state.fieldErrors?.[field];
 
   return (
-    <form action={formAction} className="mt-8 grid gap-8 lg:grid-cols-3">
+    <div className="mt-8">
+      {/* مؤشر الخطوات */}
+      <ol className="flex items-center gap-2 text-sm">
+        {STEPS.map((s, i) => (
+          <li key={s.n} className="flex flex-1 items-center gap-2">
+            <span
+              className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold num ${
+                step >= s.n ? "bg-brand-700 text-white" : "bg-ink-100 text-muted dark:bg-ink-800"
+              }`}
+            >
+              {s.n}
+            </span>
+            <span className={step >= s.n ? "font-semibold" : "text-muted"}>{s.label}</span>
+            {i < STEPS.length - 1 && <span className="mx-2 hidden h-px flex-1 bg-[var(--border-subtle)] sm:block" />}
+          </li>
+        ))}
+      </ol>
+
+      {/* الخطوة ١: رقم الجوال فقط — أقل احتكاك ممكن للبدء، بلا حساب أو تسجيل دخول */}
+      {step === 1 && (
+        <div className="mx-auto mt-8 max-w-sm">
+          <div className="surface-card p-6 text-center">
+            <h2 className="text-base font-semibold">أدخل رقم جوالك للمتابعة</h2>
+            <p className="mt-1 text-xs text-muted">تسوّق كزائر — بلا حاجة لإنشاء حساب</p>
+            <div className="mt-5 text-start">
+              <label className="block text-sm">
+                <span className="mb-1.5 block font-medium text-muted">رقم الجوال</span>
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  placeholder="05xxxxxxxx"
+                  autoFocus
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className={`h-12 w-full rounded-xl border bg-transparent px-3.5 outline-none transition-shadow focus:ring-2 ${
+                    phoneTouched && !phone.trim() ? "border-red-400 focus:ring-red-400/40" : "focus:ring-brand-500/40"
+                  }`}
+                />
+                {phoneTouched && !phone.trim() && <span className="mt-1 block text-xs text-red-600">رقم الجوال مطلوب</span>}
+              </label>
+            </div>
+            <Button type="button" size="lg" className="mt-5 w-full" onClick={goToDetails}>
+              متابعة للدفع
+            </Button>
+            <div className="mt-4 flex items-center justify-between border-t pt-4 text-sm">
+              <span className="text-muted">الإجمالي المتوقع</span>
+              <Price value={totals.grandTotal} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* الخطوة ٢: باقي بيانات التوصيل وطريقة الدفع، ثم إتمام الطلب فعلياً */}
+      {step === 2 && (
+        <form action={formAction} className="mt-8 grid gap-8 lg:grid-cols-3">
       <div className="space-y-6 lg:col-span-2">
+        <button type="button" onClick={() => setStep(1)} className="text-sm font-medium text-brand-700 hover:underline">
+          → تعديل رقم الجوال
+        </button>
+
         {state.error && (
           <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-inset ring-red-200 dark:bg-red-950 dark:text-red-300">
             {state.error}
@@ -62,13 +136,13 @@ export function CheckoutForm({
         <section className="surface-card p-5">
           <h2 className="text-sm font-semibold">معلومات التواصل والتوصيل</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Field name="name" label="الاسم الكامل" placeholder="مثال: سارة العتيبي" error={err("name")} />
-            <Field name="phone" label="رقم الجوال" placeholder="05xxxxxxxx" type="tel" error={err("phone")} />
-            <Field name="email" label="البريد الإلكتروني (اختياري)" placeholder="example@mail.com" type="email" className="sm:col-span-2" />
-            <Field name="city" label="المدينة" placeholder="الرياض" error={err("city")} />
-            <Field name="district" label="الحي (اختياري)" placeholder="حي النخيل" />
-            <Field name="street" label="العنوان التفصيلي" placeholder="اسم الشارع، رقم المبنى" className="sm:col-span-2" error={err("street")} />
-            <Field name="notes" label="ملاحظات إضافية (اختياري)" placeholder="تفاصيل توصيل إضافية" className="sm:col-span-2" />
+            <Field name="name" label="الاسم الكامل" placeholder="مثال: سارة العتيبي" defaultValue={state.values?.name} error={err("name")} autoFocus />
+            <Field name="phone" label="رقم الجوال" placeholder="05xxxxxxxx" type="tel" defaultValue={state.values?.phone ?? phone} error={err("phone")} />
+            <Field name="email" label="البريد الإلكتروني (اختياري)" placeholder="example@mail.com" type="email" defaultValue={state.values?.email} className="sm:col-span-2" />
+            <Field name="city" label="المدينة" placeholder="الرياض" defaultValue={state.values?.city} error={err("city")} />
+            <Field name="district" label="الحي (اختياري)" placeholder="حي النخيل" defaultValue={state.values?.district} />
+            <Field name="street" label="العنوان التفصيلي" placeholder="اسم الشارع، رقم المبنى" className="sm:col-span-2" defaultValue={state.values?.street} error={err("street")} />
+            <Field name="notes" label="ملاحظات إضافية (اختياري)" placeholder="تفاصيل توصيل إضافية" className="sm:col-span-2" defaultValue={state.values?.notes} />
           </div>
         </section>
 
@@ -206,7 +280,9 @@ export function CheckoutForm({
         </Button>
         <p className="mt-3 text-center text-[11px] text-muted">بالمتابعة أنت توافق على الشروط والأحكام</p>
       </aside>
-    </form>
+        </form>
+      )}
+    </div>
   );
 }
 
