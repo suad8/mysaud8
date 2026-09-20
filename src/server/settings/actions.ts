@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/server/auth/session";
+import { logAudit } from "@/server/audit/log";
 import { saveUploadedFile, UploadError } from "@/lib/uploads";
 import {
   getHeroContent,
@@ -13,7 +14,7 @@ import {
 } from "@/server/settings";
 
 export async function updateBankSettingsAction(formData: FormData) {
-  await requireAdmin();
+  const session = await requireAdmin();
 
   await saveBankTransferSettings({
     enabled: formData.get("enabled") === "on",
@@ -22,13 +23,15 @@ export async function updateBankSettingsAction(formData: FormData) {
     iban: String(formData.get("iban") ?? "").trim(),
     accountNumber: String(formData.get("accountNumber") ?? "").trim(),
   });
+  // لا نسجّل رقم الآيبان/الحساب في التفاصيل — سجل التدقيق نفسه بيانات حسّاسة يجب تقليلها
+  await logAudit({ actorId: session.sub, action: "settings.bank.updated", entity: "Setting", entityId: "payment.bankTransfer" });
 
   revalidatePath("/admin/settings");
   revalidatePath("/checkout");
 }
 
 export async function updateGatewaySettingsAction(formData: FormData) {
-  await requireAdmin();
+  const session = await requireAdmin();
   const current = await getMoyasarSettings();
   const secretInput = String(formData.get("secretKey") ?? "").trim();
 
@@ -38,6 +41,8 @@ export async function updateGatewaySettingsAction(formData: FormData) {
     // حقل الفارغ يعني "أبقِ المفتاح المحفوظ سابقاً" — لا نفرغه بالخطأ عند إعادة الحفظ
     secretKey: secretInput || current.secretKey,
   });
+  // لا نسجّل أي مفتاح فعلي في سجل التدقيق — فقط أن الإعداد تغيّر
+  await logAudit({ actorId: session.sub, action: "settings.gateway.updated", entity: "Setting", entityId: "payment.moyasar" });
 
   revalidatePath("/admin/settings");
 }
@@ -48,7 +53,7 @@ export async function updateStoreInfoAction(
   _prevState: SettingsFormState,
   formData: FormData,
 ): Promise<SettingsFormState> {
-  await requireAdmin();
+  const session = await requireAdmin();
 
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return { error: "اسم المتجر مطلوب" };
@@ -59,6 +64,7 @@ export async function updateStoreInfoAction(
     phone: String(formData.get("phone") ?? "").trim(),
     email: String(formData.get("email") ?? "").trim(),
   });
+  await logAudit({ actorId: session.sub, action: "settings.storeInfo.updated", entity: "Setting", entityId: "store.info" });
 
   revalidatePath("/admin/settings");
   revalidatePath("/", "layout");
@@ -69,7 +75,7 @@ export async function updateHeroContentAction(
   _prevState: SettingsFormState,
   formData: FormData,
 ): Promise<SettingsFormState> {
-  await requireAdmin();
+  const session = await requireAdmin();
 
   const current = await getHeroContent();
   let imageUrl = current.imageUrl;
@@ -96,6 +102,7 @@ export async function updateHeroContentAction(
     secondaryCtaHref: String(formData.get("secondaryCtaHref") ?? "").trim() || "/",
     imageUrl,
   });
+  await logAudit({ actorId: session.sub, action: "settings.hero.updated", entity: "Setting", entityId: "content.hero" });
 
   revalidatePath("/admin/settings");
   revalidatePath("/");

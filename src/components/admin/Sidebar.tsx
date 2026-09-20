@@ -22,7 +22,7 @@ export function Sidebar({ session }: { session: SessionPayload }) {
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-        {ADMIN_NAV.map((item) => {
+        {ADMIN_NAV.filter((item) => !("ownerOnly" in item && item.ownerOnly) || session.role === "OWNER").map((item) => {
           const active = item.href === "/admin" ? pathname === item.href : pathname.startsWith(item.href);
           return (
             <Link

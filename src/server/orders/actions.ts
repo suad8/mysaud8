@@ -6,6 +6,8 @@ import { db } from "@/server/db";
 import { saveUploadedFile, UploadError } from "@/lib/uploads";
 import { createOrderFromCheckout } from "@/server/orders/create";
 import { requireAdmin } from "@/server/auth/session";
+import { logAudit } from "@/server/audit/log";
+import { getClientIp } from "@/lib/request-ip";
 import { OrderStatus, PaymentStatus } from "@prisma/client";
 
 export type CheckoutFormState = {
@@ -20,10 +22,30 @@ const REQUIRED: [string, string][] = [
   ["street", "العنوان التفصيلي"],
 ];
 
+/**
+ * حماية بسيطة من إغراق صفحة الدفع بطلبات وهمية متكررة — بالذاكرة داخل
+ * نفس العملية (نفس قيود login rate-limit: لا تُشارك بين عدّة نسخ خادم).
+ */
+const orderAttempts = new Map<string, { count: number; windowStart: number }>();
+const MAX_ORDERS_PER_WINDOW = 5;
+const WINDOW_MS = 10 * 60 * 1000;
+
 export async function createOrderAction(
   _prevState: CheckoutFormState,
   formData: FormData,
 ): Promise<CheckoutFormState> {
+  const ip = (await getClientIp()) ?? "unknown";
+  const now = Date.now();
+  const record = orderAttempts.get(ip);
+  if (record && now - record.windowStart < WINDOW_MS) {
+    if (record.count >= MAX_ORDERS_PER_WINDOW) {
+      return { error: "عدد كبير من الطلبات خلال وقت قصير — يرجى المحاولة لاحقاً." };
+    }
+    record.count += 1;
+  } else {
+    orderAttempts.set(ip, { count: 1, windowStart: now });
+  }
+
   const fieldErrors: Record<string, string> = {};
   for (const [key, label] of REQUIRED) {
     if (!String(formData.get(key) ?? "").trim()) fieldErrors[key] = `${label} مطلوب`;
@@ -86,7 +108,7 @@ export async function createOrderAction(
  * مربوطة بمعرّف الطلب عبر .bind، فتستقبل FormData تلقائياً من <form>.
  */
 export async function confirmBankPaymentAction(orderId: string, _formData: FormData) {
-  await requireAdmin();
+  const session = await requireAdmin();
   const order = await db.order.findUnique({ where: { id: orderId }, include: { payments: true } });
   if (!order) return;
   const payment = order.payments.find((p) => p.method === "BANK_TRANSFER" && p.status === "INITIATED");
@@ -97,6 +119,7 @@ export async function confirmBankPaymentAction(orderId: string, _formData: FormD
     db.order.update({ where: { id: order.id }, data: { status: OrderStatus.PAID, paidAt: new Date() } }),
     db.orderEvent.create({ data: { orderId: order.id, message: "تم تأكيد الدفع من فريق المتجر بعد مراجعة الإيصال", status: OrderStatus.PAID } }),
   ]);
+  await logAudit({ actorId: session.sub, action: "payment.confirmed", entity: "Order", entityId: order.id });
 
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath("/admin/orders");
@@ -109,7 +132,7 @@ export async function confirmBankPaymentAction(orderId: string, _formData: FormD
  * كوسيط ثانٍ تلقائياً من عنصر <form> — منها نقرأ سبب الرفض.
  */
 export async function rejectBankPaymentAction(orderId: string, formData: FormData) {
-  await requireAdmin();
+  const session = await requireAdmin();
   const order = await db.order.findUnique({ where: { id: orderId }, include: { payments: true } });
   if (!order) return;
   const payment = order.payments.find((p) => p.method === "BANK_TRANSFER" && p.status === "INITIATED");
@@ -121,6 +144,7 @@ export async function rejectBankPaymentAction(orderId: string, formData: FormDat
     db.payment.update({ where: { id: payment.id }, data: { status: PaymentStatus.FAILED, failureReason: note } }),
     db.orderEvent.create({ data: { orderId: order.id, message: `تم رفض إيصال التحويل: ${note}` } }),
   ]);
+  await logAudit({ actorId: session.sub, action: "payment.rejected", entity: "Order", entityId: order.id, diff: { reason: note } });
 
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath("/admin/orders");

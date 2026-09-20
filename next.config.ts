@@ -12,6 +12,34 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
   // HSTS: يجبر المتصفح على HTTPS دائماً بعد أول زيارة ناجحة
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
+  // يمنع تسريب الموقع كمصدر تضمين لموارد مواقع أخرى (يكمّل CORP أدناه)
+  { key: "X-DNS-Prefetch-Control", value: "off" },
+  // يعزل نوافذ المتصفح الأخرى عن الوصول لهذه الصفحة عبر window.opener
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+  // يمنع مواقع أخرى من تضمين موارد هذا الموقع مباشرة (صور، سكربتات...)
+  { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
+  /**
+   * CSP: كل الموارد (سكربت/تنسيق/صور/خطوط) مُستضافة محلياً حالياً — لا
+   * تحميل من أي نطاق خارجي (لا CDN، لا خطوط جوجل، لا سكربتات تحليلات).
+   * 'unsafe-inline' مطلوب لسكربتات Next.js التمهيدية (hydration data) لأنها
+   * غير مُوقَّعة بـ nonce في هذا الإعداد. عند ربط ودجت دفع خارجي (Moyasar)
+   * لاحقاً يجب إضافة نطاقه صراحة هنا بدل توسيع القاعدة العامة.
+   */
+  {
+    key: "Content-Security-Policy",
+    value: [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob:",
+      "font-src 'self' data:",
+      "connect-src 'self'",
+      "frame-ancestors 'none'",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+    ].join("; "),
+  },
 ];
 
 const config: NextConfig = {

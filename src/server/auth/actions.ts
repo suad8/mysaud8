@@ -6,6 +6,8 @@ import { db } from "@/server/db";
 import { hashPassword, verifyPassword } from "@/server/auth/password";
 import { setSessionCookie, clearSessionCookie, getSession, requireAdmin } from "@/server/auth/session";
 import { AdminRole } from "@prisma/client";
+import { logAudit } from "@/server/audit/log";
+import { getClientIp } from "@/lib/request-ip";
 
 export type LoginState = { error?: string; email?: string };
 
@@ -24,6 +26,7 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
   const password = String(formData.get("password") ?? "");
   const next = String(formData.get("next") ?? "/admin");
 
+  const ip = await getClientIp();
   const key = email || "unknown";
   const record = attempts.get(key);
   if (record && record.lockedUntil > Date.now()) {
@@ -43,17 +46,30 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
     const updated = { count: (record?.count ?? 0) + 1, lockedUntil: 0 };
     if (updated.count >= MAX_ATTEMPTS) updated.lockedUntil = Date.now() + LOCK_MS;
     attempts.set(key, updated);
+    await logAudit({
+      actorId: user?.id ?? null,
+      action: updated.lockedUntil > 0 ? "login.locked" : "login.failed",
+      entity: "AdminUser",
+      entityId: user?.id ?? null,
+      diff: { email },
+      ip,
+    });
     return { error: "البريد الإلكتروني أو كلمة المرور غير صحيحة", email };
   }
 
   attempts.delete(key);
   await setSessionCookie({ sub: user!.id, role: user!.role, name: user!.name });
   await db.adminUser.update({ where: { id: user!.id }, data: { lastLoginAt: new Date() } });
+  await logAudit({ actorId: user!.id, action: "login.success", entity: "AdminUser", entityId: user!.id, ip });
 
   redirect(next.startsWith("/admin") ? next : "/admin");
 }
 
 export async function logoutAction() {
+  const session = await getSession();
+  if (session) {
+    await logAudit({ actorId: session.sub, action: "logout", entity: "AdminUser", entityId: session.sub });
+  }
   await clearSessionCookie();
   redirect("/admin/login");
 }
@@ -80,6 +96,7 @@ export async function changePasswordAction(
   }
 
   await db.adminUser.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(next) } });
+  await logAudit({ actorId: session.sub, action: "password.changed", entity: "AdminUser", entityId: session.sub });
   return { success: true };
 }
 
@@ -98,7 +115,7 @@ export async function createAdminUserAction(
   _prevState: ManageUsersState,
   formData: FormData,
 ): Promise<ManageUsersState> {
-  await requireOwner();
+  const owner = await requireOwner();
 
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
@@ -113,9 +130,10 @@ export async function createAdminUserAction(
   const existing = await db.adminUser.findUnique({ where: { email } });
   if (existing) return { error: "هذا البريد الإلكتروني مستخدم مسبقاً" };
 
-  await db.adminUser.create({
+  const created = await db.adminUser.create({
     data: { name, email, role, passwordHash: await hashPassword(password) },
   });
+  await logAudit({ actorId: owner.sub, action: "adminUser.created", entity: "AdminUser", entityId: created.id, diff: { email, role } });
 
   revalidatePath("/admin/settings");
   return { success: true };
@@ -130,5 +148,12 @@ export async function toggleAdminUserActiveAction(userId: string, _formData: For
   if (!target) return;
 
   await db.adminUser.update({ where: { id: userId }, data: { isActive: !target.isActive } });
+  await logAudit({
+    actorId: session.sub,
+    action: "adminUser.toggled",
+    entity: "AdminUser",
+    entityId: userId,
+    diff: { isActive: !target.isActive },
+  });
   revalidatePath("/admin/settings");
 }

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/server/db";
 import { saveUploadedFile, UploadError } from "@/lib/uploads";
 import { requireAdmin } from "@/server/auth/session";
+import { logAudit } from "@/server/audit/log";
 import { ProductStatus } from "@prisma/client";
 
 export type ProductFormState = {
@@ -83,7 +84,7 @@ export async function createProductAction(
   _prevState: ProductFormState,
   formData: FormData,
 ): Promise<ProductFormState> {
-  await requireAdmin();
+  const session = await requireAdmin();
 
   const parsed = parseProductFields(formData);
   if (Object.keys(parsed.fieldErrors).length > 0) return { fieldErrors: parsed.fieldErrors };
@@ -138,6 +139,8 @@ export async function createProductAction(
     return { error: "حدث خطأ أثناء إنشاء المنتج، يرجى المحاولة مرة أخرى." };
   }
 
+  await logAudit({ actorId: session.sub, action: "product.created", entity: "Product", entityId: productId, diff: { nameAr: parsed.nameAr } });
+
   revalidatePath("/admin/products");
   revalidatePath("/admin/inventory");
   revalidatePath("/");
@@ -149,7 +152,7 @@ export async function updateProductAction(
   _prevState: ProductFormState,
   formData: FormData,
 ): Promise<ProductFormState> {
-  await requireAdmin();
+  const session = await requireAdmin();
 
   const parsed = parseProductFields(formData);
   if (Object.keys(parsed.fieldErrors).length > 0) return { fieldErrors: parsed.fieldErrors };
@@ -217,6 +220,8 @@ export async function updateProductAction(
     return { error: "حدث خطأ أثناء حفظ التغييرات، يرجى المحاولة مرة أخرى." };
   }
 
+  await logAudit({ actorId: session.sub, action: "product.updated", entity: "Product", entityId: productId });
+
   revalidatePath(`/admin/products/${productId}`);
   revalidatePath("/admin/products");
   revalidatePath("/admin/inventory");
@@ -226,16 +231,18 @@ export async function updateProductAction(
 
 /** أرشفة: يخفي المنتج من المتجر دون حذف سجلاته (الطلبات القديمة تبقى صالحة). */
 export async function archiveProductAction(productId: string, _formData: FormData) {
-  await requireAdmin();
+  const session = await requireAdmin();
   await db.product.update({ where: { id: productId }, data: { status: "ARCHIVED" } });
+  await logAudit({ actorId: session.sub, action: "product.archived", entity: "Product", entityId: productId });
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${productId}`);
   revalidatePath("/");
 }
 
 export async function publishProductAction(productId: string, _formData: FormData) {
-  await requireAdmin();
+  const session = await requireAdmin();
   await db.product.update({ where: { id: productId }, data: { status: "ACTIVE" } });
+  await logAudit({ actorId: session.sub, action: "product.published", entity: "Product", entityId: productId });
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${productId}`);
   revalidatePath("/");
@@ -243,8 +250,9 @@ export async function publishProductAction(productId: string, _formData: FormDat
 
 /** حذف ناعم: يُخفى المنتج من كل مكان لكن سجلات الطلبات القديمة تبقى سليمة. */
 export async function softDeleteProductAction(productId: string, _formData: FormData) {
-  await requireAdmin();
+  const session = await requireAdmin();
   await db.product.update({ where: { id: productId }, data: { deletedAt: new Date(), status: "ARCHIVED" } });
+  await logAudit({ actorId: session.sub, action: "product.deleted", entity: "Product", entityId: productId });
   revalidatePath("/admin/products");
   revalidatePath("/");
   redirect("/admin/products");

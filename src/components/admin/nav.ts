@@ -6,5 +6,11 @@ export const ADMIN_NAV = [
   { href: "/admin/customers", label: "العملاء", icon: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" },
   { href: "/admin/discounts", label: "الخصومات", icon: "M20 12l-8 8-9-9V4h7l10 8ZM7 7h.01" },
   { href: "/admin/reports", label: "التقارير", icon: "M4 20V10m6 10V4m6 16v-7" },
+  {
+    href: "/admin/audit-log",
+    label: "سجل النشاطات",
+    icon: "M9 12h6M9 16h6M9 8h6M5 4h14v16l-3-2-2 2-2-2-2 2-2-2-3 2Z",
+    ownerOnly: true,
+  },
   { href: "/admin/settings", label: "الإعدادات", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6a7 7 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-1c.6.5 1.3.9 2 1.2L10 21h4l.5-2.6c.7-.3 1.4-.7 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2Z" },
 ] as const;

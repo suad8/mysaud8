@@ -10,6 +10,9 @@ import { getSession } from "@/server/auth/session";
 import { AdminRole } from "@prisma/client";
 import { getBankTransferSettings, getHeroContent, getMoyasarSettings, getStoreInfoSettings, maskSecret } from "@/server/settings";
 import { updateBankSettingsAction, updateGatewaySettingsAction } from "@/server/settings/actions";
+import { CURRENCY, TAX_RATE } from "@/lib/constants";
+
+const CURRENCY_LABEL = CURRENCY === "SAR" ? "ريال سعودي (SAR)" : CURRENCY;
 
 function Section({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
   return (
@@ -85,13 +88,16 @@ export default async function AdminSettingsPage() {
         </Section>
 
         <Section title="الضريبة والعملة">
-          <Field name="taxRate" label="نسبة ضريبة القيمة المضافة" defaultValue="15" unit="%" />
-          <Field name="currency" label="العملة" defaultValue="ريال سعودي (SAR)" />
-          <label className="flex items-center gap-2.5 text-sm">
-            <input type="checkbox" defaultChecked className="h-4 w-4 accent-brand-600" />
+          <Field name="taxRate" label="نسبة ضريبة القيمة المضافة" defaultValue={`${(TAX_RATE * 100).toFixed(0)}`} unit="%" disabled />
+          <Field name="currency" label="العملة" defaultValue={CURRENCY_LABEL} disabled />
+          <label className="flex items-center gap-2.5 text-sm text-muted">
+            <input type="checkbox" defaultChecked disabled className="h-4 w-4 accent-brand-600" />
             الأسعار المعروضة شاملة الضريبة
           </label>
-          <p className="text-[11px] text-muted">* هذا القسم عرض تصميمي حالياً — الحفظ الفعلي قادم في مرحلة لاحقة.</p>
+          <p className="text-[11px] text-muted">
+            * تُضبط نسبة الضريبة والعملة عبر متغيّرات البيئة على الخادم (وليس من هنا) لأسباب امتثال ضريبي — أي
+            تغيير يتطلب تحديث الإعداد على الاستضافة وإعادة النشر.
+          </p>
         </Section>
 
         <Section title="تغيير كلمة المرور" desc="لحسابك الحالي فقط.">
