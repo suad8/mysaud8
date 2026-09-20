@@ -26,7 +26,7 @@ export function StatCard({
       <p className="num mt-3 text-2xl font-bold tracking-tight">{value}</p>
       {delta && (
         <p className={cn("num mt-1.5 flex items-center gap-1 text-xs font-medium", tone === "up" ? "text-emerald-600" : "text-red-600")}>
-          <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round" className={cn("h-3.5 w-3.5", tone === "down" && "rotate-180")}>
+          <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round" className={cn("h-3.5 w-3.5 stroke-current", tone === "down" && "rotate-180")}>
             <path d="M12 19V5M5 12l7-7 7 7" />
           </svg>
           {delta}
