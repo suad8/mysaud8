@@ -3,9 +3,14 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 
 /**
- * تخزين الملفات المرفوعة (إيصالات التحويل البنكي) محلياً في public/uploads.
+ * تخزين الملفات المرفوعة (إيصالات تحويل بنكي، صور منتجات) محلياً على القرص.
  *
- * ⚠️ هذا مناسب للتطوير ولخادم Node تقليدي فقط. في الإنتاج على منصة
+ * الرابط المُعاد يمرّ عبر src/app/api/uploads/[...path]/route.ts وليس
+ * مباشرة عبر public/ — خادم next start يبني قائمة ملفات public/ عند
+ * بدء التشغيل فقط، فأي ملف يُحفظ بعد ذلك يرجع 404 حتى تُعاد تشغيل
+ * الخادم كاملاً. المسار الديناميكي يقرأ من القرص في كل طلب فيتجنّب هذا.
+ *
+ * ⚠️ هذا مناسب لخادم Node تقليدي بقرص دائم فقط. في الإنتاج على منصة
  * بلا نظام ملفات دائم (Vercel، إلخ) يجب استبدال هذا برفع إلى S3
  * (المتغيّرات جاهزة في .env.example: S3_ENDPOINT / S3_BUCKET...).
  */
@@ -40,5 +45,5 @@ export async function saveUploadedFile(file: File, subdir: string): Promise<stri
   const buffer = Buffer.from(await file.arrayBuffer());
   await writeFile(path.join(dir, filename), buffer);
 
-  return `/uploads/${subdir}/${filename}`;
+  return `/api/uploads/${subdir}/${filename}`;
 }

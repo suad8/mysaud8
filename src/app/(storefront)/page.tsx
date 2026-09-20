@@ -3,15 +3,22 @@ import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Price } from "@/components/ui/Price";
 import { Rating } from "@/components/ui/Rating";
-import { ProductCard } from "@/components/storefront/ProductCard";
+import { ProductCard, type ProductCardData } from "@/components/storefront/ProductCard";
 import {
+  getActiveProductCount,
   getCategories,
   getFeaturedProducts,
   getNewArrivals,
-  getProductBySlug,
+  getPromoProduct,
   getTestimonials,
 } from "@/server/catalog/queries";
 import { formatNumber } from "@/lib/format";
+
+type CardDisplay = { slug: string; nameAr: string; imageUrl: string; price: number; rating: number };
+
+function cardToDisplay(p: ProductCardData): CardDisplay {
+  return { slug: p.slug, nameAr: p.nameAr, imageUrl: p.imageUrl, price: p.price, rating: p.rating };
+}
 
 const TRUST = [
   { title: "تحميص أسبوعي", desc: "حبوب طازجة دائماً", icon: "M12 2c4 4 6 7 6 11a6 6 0 1 1-12 0c0-4 2-7 6-11Z" },
@@ -23,15 +30,21 @@ const TRUST = [
 const AVATAR_COLORS = ["bg-brand-500", "bg-accent-500", "bg-brand-300"];
 
 export default async function HomePage() {
-  const [featured, arrivals, categories, testimonials, bundle, heroProduct, secondProduct] = await Promise.all([
+  const [featured, arrivals, categories, testimonials, bundle, productCount] = await Promise.all([
     getFeaturedProducts(8),
     getNewArrivals(4),
     getCategories(),
     getTestimonials(3),
-    getProductBySlug("gift-morning-ritual"),
-    getProductBySlug("ceremonial-matcha"),
-    getProductBySlug("finjan-blend"),
+    getPromoProduct(),
+    getActiveProductCount(),
   ]);
+
+  // صورة البانر والبطاقة العائمة تُختاران من الكتالوج الفعلي (المميّز ثم الأحدث)
+  // بدل الاعتماد على منتجات محدَّدة سلفاً قد لا تكون موجودة في متجر حقيقي.
+  const pool = [...featured, ...arrivals];
+  const heroDisplay: CardDisplay | null = pool[0] ? cardToDisplay(pool[0]) : null;
+  const secondCandidate = pool.find((p) => p.slug !== heroDisplay?.slug);
+  const secondDisplay: CardDisplay | null = secondCandidate ? cardToDisplay(secondCandidate) : null;
 
   return (
     <>
@@ -63,7 +76,7 @@ export default async function HomePage() {
               </Button>
             </div>
             <dl className="mt-10 flex items-center gap-6 sm:gap-8">
-              {[["+2,400", "عميل سعيد"], ["4.8", "متوسط التقييم"], ["19", "منتج مختار"]].map(([v, l], i) => (
+              {[["+2,400", "عميل سعيد"], ["4.8", "متوسط التقييم"], [formatNumber(productCount), "منتج مختار"]].map(([v, l], i) => (
                 <div key={l} className="flex items-center gap-6 sm:gap-8">
                   {i > 0 && <span className="h-9 w-px bg-[var(--border-subtle)]" />}
                   <div>
@@ -78,9 +91,9 @@ export default async function HomePage() {
           {/* الصورة والعناصر العائمة */}
           <div className="relative">
             <div aria-hidden className="blob inset-0 m-auto h-[85%] w-[85%] bg-gradient-to-br from-brand-200 to-accent-100 dark:from-brand-900 dark:to-accent-900/40" />
-            {heroProduct && (
+            {heroDisplay && (
               <div className="relative aspect-square overflow-hidden rounded-[2rem] shadow-[var(--shadow-lift)]">
-                <Image src={heroProduct.images[0]?.url ?? "/products/placeholder.svg"} alt={heroProduct.nameAr} fill sizes="(max-width: 1024px) 90vw, 45vw" className="object-cover" priority />
+                <Image src={heroDisplay.imageUrl} alt={heroDisplay.nameAr} fill sizes="(max-width: 1024px) 90vw, 45vw" className="object-cover" priority />
               </div>
             )}
 
@@ -98,18 +111,18 @@ export default async function HomePage() {
             </div>
 
             {/* بطاقة منتج عائمة */}
-            {secondProduct && (
+            {secondDisplay && (
               <Link
-                href={`/p/${secondProduct.slug}`}
+                href={`/p/${secondDisplay.slug}`}
                 className="absolute -bottom-6 end-2 flex items-center gap-3 rounded-2xl bg-white p-3 pe-5 shadow-[var(--shadow-lift)] transition-transform hover:-translate-y-0.5 dark:bg-ink-900 sm:end-6"
               >
                 <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-[var(--surface-sunken)]">
-                  <Image src={secondProduct.images[0]?.url ?? "/products/placeholder.svg"} alt={secondProduct.nameAr} fill sizes="56px" className="object-cover" />
+                  <Image src={secondDisplay.imageUrl} alt={secondDisplay.nameAr} fill sizes="56px" className="object-cover" />
                 </div>
                 <div>
-                  <p className="max-w-32 truncate text-xs font-bold">{secondProduct.nameAr}</p>
-                  <Rating value={secondProduct.rating} size={11} className="mt-0.5" />
-                  <Price value={secondProduct.variants[0]?.price ?? secondProduct.basePrice} size="sm" className="mt-0.5" />
+                  <p className="max-w-32 truncate text-xs font-bold">{secondDisplay.nameAr}</p>
+                  <Rating value={secondDisplay.rating} size={11} className="mt-0.5" />
+                  <Price value={secondDisplay.price} size="sm" className="mt-0.5" />
                 </div>
               </Link>
             )}
@@ -162,22 +175,24 @@ export default async function HomePage() {
       </section>
 
       {/* ── المنتجات المميزة ───────────────────────────────── */}
-      <section className="mx-auto max-w-7xl px-4 pb-14">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-extrabold tracking-tight">الأكثر طلباً</h2>
-            <p className="mt-1.5 text-sm text-muted">اختيارات عملائنا هذا الشهر</p>
+      {featured.length > 0 && (
+        <section className="mx-auto max-w-7xl px-4 pb-14">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-extrabold tracking-tight">الأكثر طلباً</h2>
+              <p className="mt-1.5 text-sm text-muted">اختيارات عملائنا هذا الشهر</p>
+            </div>
+            <Link href="/c/coffee-beans" className="shrink-0 text-sm font-semibold text-brand-700 hover:underline">
+              عرض الكل ←
+            </Link>
           </div>
-          <Link href="/c/coffee-beans" className="shrink-0 text-sm font-semibold text-brand-700 hover:underline">
-            عرض الكل ←
-          </Link>
-        </div>
-        <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {featured.map((p) => (
-            <ProductCard key={p.slug} product={p} />
-          ))}
-        </div>
-      </section>
+          <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+            {featured.map((p) => (
+              <ProductCard key={p.slug} product={p} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── بندل العرض ─────────────────────────────────────── */}
       {bundle && (
@@ -239,14 +254,16 @@ export default async function HomePage() {
       )}
 
       {/* ── وصل حديثاً ─────────────────────────────────────── */}
-      <section className="mx-auto max-w-7xl px-4 pb-14">
-        <h2 className="text-2xl font-extrabold tracking-tight">وصل حديثاً</h2>
-        <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {arrivals.map((p) => (
-            <ProductCard key={p.slug} product={p} />
-          ))}
-        </div>
-      </section>
+      {arrivals.length > 0 && (
+        <section className="mx-auto max-w-7xl px-4 pb-14">
+          <h2 className="text-2xl font-extrabold tracking-tight">وصل حديثاً</h2>
+          <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+            {arrivals.map((p) => (
+              <ProductCard key={p.slug} product={p} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── دعوة أخيرة ─────────────────────────────────────── */}
       <section className="relative overflow-hidden bg-brand-50 py-16 text-center dark:bg-ink-950">

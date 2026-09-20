@@ -137,6 +137,20 @@ export async function getCategories() {
   });
 }
 
+export async function getActiveProductCount() {
+  return db.product.count({ where: LIVE });
+}
+
+/** يبحث عن منتج مناسب لقسم "بندل العرض" — أي منتج نشط عليه تخفيض حالياً. */
+export async function getPromoProduct() {
+  const candidate = await db.product.findFirst({
+    where: { ...LIVE, comparePrice: { not: null } },
+    orderBy: { createdAt: "desc" },
+    select: { slug: true },
+  });
+  return candidate ? getProductBySlug(candidate.slug) : null;
+}
+
 export async function getTestimonials(limit = 3) {
   const reviews = await db.review.findMany({
     where: { isApproved: true, rating: { gte: 4 }, comment: { not: null } },
