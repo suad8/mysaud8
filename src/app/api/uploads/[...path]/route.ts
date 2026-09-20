@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import { getSession } from "@/server/auth/session";
 
 /**
  * يخدّم الملفات المرفوعة وقت التشغيل (إيصالات التحويل، صور المنتجات)
@@ -11,6 +12,9 @@ import path from "node:path";
  * يُرفع بعد ذلك يرجع 404 حتى يُعاد تشغيل الخادم بالكامل. هذا المسار
  * الديناميكي يقرأ من القرص مباشرة في كل طلب فيعمل دائماً بلا إعادة تشغيل.
  */
+
+/** مجلدات تحتوي مستندات حسّاسة (إيصالات تحويل بنكي) — تُقرأ فقط من لوحة التحكم. */
+const ADMIN_ONLY_SUBDIRS = new Set(["receipts"]);
 
 const MIME: Record<string, string> = {
   ".jpg": "image/jpeg",
@@ -27,6 +31,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ path: s
 
   if (!segments?.length || segments.some((s) => s === ".." || s === "." || s.includes("/"))) {
     return new NextResponse("غير موجود", { status: 404 });
+  }
+
+  if (ADMIN_ONLY_SUBDIRS.has(segments[0])) {
+    const session = await getSession();
+    if (!session) return new NextResponse("غير موجود", { status: 404 });
   }
 
   const filePath = path.join(UPLOADS_ROOT, ...segments);

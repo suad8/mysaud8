@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/server/db";
 import { saveUploadedFile, UploadError } from "@/lib/uploads";
+import { requireAdmin } from "@/server/auth/session";
 import { ProductStatus } from "@prisma/client";
 
 export type ProductFormState = {
@@ -82,6 +83,8 @@ export async function createProductAction(
   _prevState: ProductFormState,
   formData: FormData,
 ): Promise<ProductFormState> {
+  await requireAdmin();
+
   const parsed = parseProductFields(formData);
   if (Object.keys(parsed.fieldErrors).length > 0) return { fieldErrors: parsed.fieldErrors };
 
@@ -146,6 +149,8 @@ export async function updateProductAction(
   _prevState: ProductFormState,
   formData: FormData,
 ): Promise<ProductFormState> {
+  await requireAdmin();
+
   const parsed = parseProductFields(formData);
   if (Object.keys(parsed.fieldErrors).length > 0) return { fieldErrors: parsed.fieldErrors };
 
@@ -221,6 +226,7 @@ export async function updateProductAction(
 
 /** أرشفة: يخفي المنتج من المتجر دون حذف سجلاته (الطلبات القديمة تبقى صالحة). */
 export async function archiveProductAction(productId: string, _formData: FormData) {
+  await requireAdmin();
   await db.product.update({ where: { id: productId }, data: { status: "ARCHIVED" } });
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${productId}`);
@@ -228,6 +234,7 @@ export async function archiveProductAction(productId: string, _formData: FormDat
 }
 
 export async function publishProductAction(productId: string, _formData: FormData) {
+  await requireAdmin();
   await db.product.update({ where: { id: productId }, data: { status: "ACTIVE" } });
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${productId}`);
@@ -236,6 +243,7 @@ export async function publishProductAction(productId: string, _formData: FormDat
 
 /** حذف ناعم: يُخفى المنتج من كل مكان لكن سجلات الطلبات القديمة تبقى سليمة. */
 export async function softDeleteProductAction(productId: string, _formData: FormData) {
+  await requireAdmin();
   await db.product.update({ where: { id: productId }, data: { deletedAt: new Date(), status: "ARCHIVED" } });
   revalidatePath("/admin/products");
   revalidatePath("/");

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/server/db";
 import { saveUploadedFile, UploadError } from "@/lib/uploads";
 import { createOrderFromCheckout } from "@/server/orders/create";
+import { requireAdmin } from "@/server/auth/session";
 import { OrderStatus, PaymentStatus } from "@prisma/client";
 
 export type CheckoutFormState = {
@@ -85,6 +86,7 @@ export async function createOrderAction(
  * مربوطة بمعرّف الطلب عبر .bind، فتستقبل FormData تلقائياً من <form>.
  */
 export async function confirmBankPaymentAction(orderId: string, _formData: FormData) {
+  await requireAdmin();
   const order = await db.order.findUnique({ where: { id: orderId }, include: { payments: true } });
   if (!order) return;
   const payment = order.payments.find((p) => p.method === "BANK_TRANSFER" && p.status === "INITIATED");
@@ -107,6 +109,7 @@ export async function confirmBankPaymentAction(orderId: string, _formData: FormD
  * كوسيط ثانٍ تلقائياً من عنصر <form> — منها نقرأ سبب الرفض.
  */
 export async function rejectBankPaymentAction(orderId: string, formData: FormData) {
+  await requireAdmin();
   const order = await db.order.findUnique({ where: { id: orderId }, include: { payments: true } });
   if (!order) return;
   const payment = order.payments.find((p) => p.method === "BANK_TRANSFER" && p.status === "INITIATED");

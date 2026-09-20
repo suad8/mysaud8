@@ -1,6 +1,14 @@
+import { redirect } from "next/navigation";
 import { Topbar } from "@/components/admin/Topbar";
 import { Button } from "@/components/ui/Button";
-import { getBankTransferSettings, getMoyasarSettings, maskSecret } from "@/server/settings";
+import { HeroBannerForm } from "@/components/admin/HeroBannerForm";
+import { StoreInfoForm } from "@/components/admin/StoreInfoForm";
+import { ChangePasswordForm } from "@/components/admin/ChangePasswordForm";
+import { AdminUsersManager } from "@/components/admin/AdminUsersManager";
+import { db } from "@/server/db";
+import { getSession } from "@/server/auth/session";
+import { AdminRole } from "@prisma/client";
+import { getBankTransferSettings, getHeroContent, getMoyasarSettings, getStoreInfoSettings, maskSecret } from "@/server/settings";
 import { updateBankSettingsAction, updateGatewaySettingsAction } from "@/server/settings/actions";
 
 function Section({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
@@ -50,18 +58,30 @@ function ToggleRow({ name, label, defaultChecked }: { name: string; label: strin
 }
 
 export default async function AdminSettingsPage() {
-  const [bank, gateway] = await Promise.all([getBankTransferSettings(), getMoyasarSettings()]);
+  const session = await getSession();
+  if (!session) redirect("/admin/login");
+
+  const [bank, gateway, storeInfo, hero, users] = await Promise.all([
+    getBankTransferSettings(),
+    getMoyasarSettings(),
+    getStoreInfoSettings(),
+    getHeroContent(),
+    db.adminUser.findMany({
+      orderBy: { lastLoginAt: "desc" },
+      select: { id: true, name: true, email: true, role: true, isActive: true, lastLoginAt: true },
+    }),
+  ]);
 
   return (
     <>
       <Topbar title="الإعدادات" subtitle="بيانات المتجر والتشغيل" />
       <div className="grid gap-6 p-5 lg:grid-cols-2 lg:p-8">
         <Section title="بيانات المتجر">
-          <Field name="storeName" label="اسم المتجر" defaultValue="فنجان" />
-          <Field name="tagline" label="الشعار المختصر" defaultValue="قهوة مختصة وماتشا فاخرة" />
-          <Field name="phone" label="رقم التواصل" defaultValue="+966500000000" />
-          <Field name="email" label="البريد الإلكتروني" defaultValue="support@example.com" />
-          <p className="text-[11px] text-muted">* هذا القسم عرض تصميمي حالياً — الحفظ الفعلي قادم في مرحلة لاحقة.</p>
+          <StoreInfoForm info={storeInfo} />
+        </Section>
+
+        <Section title="بانر الصفحة الرئيسية" desc="يظهر مباشرة أعلى المتجر — الصورة والنصوص والأزرار.">
+          <HeroBannerForm hero={hero} />
         </Section>
 
         <Section title="الضريبة والعملة">
@@ -72,6 +92,10 @@ export default async function AdminSettingsPage() {
             الأسعار المعروضة شاملة الضريبة
           </label>
           <p className="text-[11px] text-muted">* هذا القسم عرض تصميمي حالياً — الحفظ الفعلي قادم في مرحلة لاحقة.</p>
+        </Section>
+
+        <Section title="تغيير كلمة المرور" desc="لحسابك الحالي فقط.">
+          <ChangePasswordForm />
         </Section>
 
         {/* ── التحويل البنكي: قسم فعّال يحفظ في قاعدة البيانات ويظهر مباشرة في صفحة الدفع ── */}
@@ -114,19 +138,8 @@ export default async function AdminSettingsPage() {
           </Section>
         </form>
 
-        <Section title="المستخدمون والصلاحيات">
-          <div className="space-y-2.5">
-            {[
-              ["مدير المتجر", "مالك"],
-              ["فريق الدعم", "موظف"],
-            ].map(([name, role]) => (
-              <div key={name} className="flex items-center justify-between rounded-xl border px-4 py-3 text-sm">
-                <span className="font-medium">{name}</span>
-                <span className="text-xs text-muted">{role}</span>
-              </div>
-            ))}
-          </div>
-          <button className="text-xs font-medium text-brand-700 hover:underline">+ دعوة مستخدم جديد</button>
+        <Section title="المستخدمون والصلاحيات" desc="حسابات الدخول إلى لوحة التحكم.">
+          <AdminUsersManager users={users} currentUserId={session.sub} canManage={session.role === AdminRole.OWNER} />
         </Section>
       </div>
     </>

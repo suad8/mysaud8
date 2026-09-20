@@ -64,6 +64,62 @@ export function saveMoyasarSettings(value: GatewaySettings) {
   return setSetting("payment.moyasar", value);
 }
 
+export type StoreInfoSettings = {
+  name: string;
+  tagline: string;
+  phone: string;
+  email: string;
+};
+
+const STORE_INFO_DEFAULTS: StoreInfoSettings = {
+  name: "فنجان",
+  tagline: "قهوة مختصة وماتشا فاخرة",
+  phone: "",
+  email: "",
+};
+
+export function getStoreInfoSettings() {
+  return getSetting<StoreInfoSettings>("store.info", STORE_INFO_DEFAULTS);
+}
+
+export function saveStoreInfoSettings(value: StoreInfoSettings) {
+  return setSetting("store.info", value);
+}
+
+/** محتوى بانر الصفحة الرئيسية — فارغ = استخدام النص/الصورة الافتراضية بالكود. */
+export type HeroContentSettings = {
+  eyebrow: string;
+  headline: string;
+  headlineHighlight: string;
+  subtitle: string;
+  ctaText: string;
+  ctaHref: string;
+  secondaryCtaText: string;
+  secondaryCtaHref: string;
+  /** صورة بانر مخصّصة — إن كانت فارغة يُستخدم أحدث منتج مميّز تلقائياً */
+  imageUrl: string;
+};
+
+const HERO_DEFAULTS: HeroContentSettings = {
+  eyebrow: "تحميص جديد كل أسبوع",
+  headline: "فنجانك المثالي",
+  headlineHighlight: "يبدأ من هنا",
+  subtitle: "قهوة مختصة تُحمَّص طازجة وماتشا يابانية فاخرة، مع أدوات تحضير مختارة بعناية — كل ما تحتاجه لتحضير فنجانك في بيتك.",
+  ctaText: "تسوّق القهوة",
+  ctaHref: "/c/coffee-beans",
+  secondaryCtaText: "اكتشف الماتشا",
+  secondaryCtaHref: "/c/matcha",
+  imageUrl: "",
+};
+
+export function getHeroContent() {
+  return getSetting<HeroContentSettings>("content.hero", HERO_DEFAULTS);
+}
+
+export function saveHeroContent(value: HeroContentSettings) {
+  return setSetting("content.hero", value);
+}
+
 /** يعرض آخر 4 خانات فقط من مفتاح سرّي محفوظ، بدل كشفه كاملاً في الواجهة. */
 export function maskSecret(secret: string): string {
   if (!secret) return "";

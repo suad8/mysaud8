@@ -12,6 +12,7 @@ import {
   getPromoProduct,
   getTestimonials,
 } from "@/server/catalog/queries";
+import { getHeroContent } from "@/server/settings";
 import { formatNumber } from "@/lib/format";
 
 type CardDisplay = { slug: string; nameAr: string; imageUrl: string; price: number; rating: number };
@@ -30,21 +31,25 @@ const TRUST = [
 const AVATAR_COLORS = ["bg-brand-500", "bg-accent-500", "bg-brand-300"];
 
 export default async function HomePage() {
-  const [featured, arrivals, categories, testimonials, bundle, productCount] = await Promise.all([
+  const [featured, arrivals, categories, testimonials, bundle, productCount, hero] = await Promise.all([
     getFeaturedProducts(8),
     getNewArrivals(4),
     getCategories(),
     getTestimonials(3),
     getPromoProduct(),
     getActiveProductCount(),
+    getHeroContent(),
   ]);
 
   // صورة البانر والبطاقة العائمة تُختاران من الكتالوج الفعلي (المميّز ثم الأحدث)
   // بدل الاعتماد على منتجات محدَّدة سلفاً قد لا تكون موجودة في متجر حقيقي.
   const pool = [...featured, ...arrivals];
-  const heroDisplay: CardDisplay | null = pool[0] ? cardToDisplay(pool[0]) : null;
-  const secondCandidate = pool.find((p) => p.slug !== heroDisplay?.slug);
+  const autoHero: CardDisplay | null = pool[0] ? cardToDisplay(pool[0]) : null;
+  const secondCandidate = pool.find((p) => p.slug !== autoHero?.slug);
   const secondDisplay: CardDisplay | null = secondCandidate ? cardToDisplay(secondCandidate) : null;
+  // صورة البانر: مخصّصة من لوحة التحكم إن وُجدت، وإلا صورة المنتج المختار تلقائياً
+  const heroImageUrl = hero.imageUrl || autoHero?.imageUrl;
+  const heroImageAlt = hero.imageUrl ? hero.headline : (autoHero?.nameAr ?? "");
 
   return (
     <>
@@ -57,22 +62,20 @@ export default async function HomePage() {
           <div>
             <span className="inline-flex items-center gap-2 rounded-full bg-white px-3.5 py-1.5 text-xs font-semibold text-brand-700 ring-1 ring-inset ring-brand-200 dark:bg-ink-900 dark:text-brand-300 dark:ring-brand-800">
               <span className="h-1.5 w-1.5 rounded-full bg-accent-500" />
-              تحميص جديد كل أسبوع
+              {hero.eyebrow}
             </span>
             <h1 className="mt-5 text-4xl font-extrabold leading-[1.15] tracking-tight text-ink-900 dark:text-white sm:text-5xl lg:text-6xl">
-              فنجانك المثالي
+              {hero.headline}
               <br />
-              <span className="text-brand-600 dark:text-brand-400">يبدأ من هنا</span>
+              <span className="text-brand-600 dark:text-brand-400">{hero.headlineHighlight}</span>
             </h1>
-            <p className="mt-5 max-w-md text-base leading-relaxed text-muted">
-              قهوة مختصة تُحمَّص طازجة وماتشا يابانية فاخرة، مع أدوات تحضير مختارة بعناية — كل ما تحتاجه لتحضير فنجانك في بيتك.
-            </p>
+            <p className="mt-5 max-w-md text-base leading-relaxed text-muted">{hero.subtitle}</p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Button href="/c/coffee-beans" size="lg">
-                تسوّق القهوة
+              <Button href={hero.ctaHref} size="lg">
+                {hero.ctaText}
               </Button>
-              <Button href="/c/matcha" variant="accent" size="lg">
-                اكتشف الماتشا
+              <Button href={hero.secondaryCtaHref} variant="accent" size="lg">
+                {hero.secondaryCtaText}
               </Button>
             </div>
             <dl className="mt-10 flex items-center gap-6 sm:gap-8">
@@ -91,9 +94,9 @@ export default async function HomePage() {
           {/* الصورة والعناصر العائمة */}
           <div className="relative">
             <div aria-hidden className="blob inset-0 m-auto h-[85%] w-[85%] bg-gradient-to-br from-brand-200 to-accent-100 dark:from-brand-900 dark:to-accent-900/40" />
-            {heroDisplay && (
+            {heroImageUrl && (
               <div className="relative aspect-square overflow-hidden rounded-[2rem] shadow-[var(--shadow-lift)]">
-                <Image src={heroDisplay.imageUrl} alt={heroDisplay.nameAr} fill sizes="(max-width: 1024px) 90vw, 45vw" className="object-cover" priority />
+                <Image src={heroImageUrl} alt={heroImageAlt} fill sizes="(max-width: 1024px) 90vw, 45vw" className="object-cover" priority />
               </div>
             )}
 

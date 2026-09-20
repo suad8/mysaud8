@@ -1,6 +1,12 @@
 import { PrismaClient, ProductStatus, OrderStatus, PaymentMethod, PaymentStatus, DiscountType, AdminRole } from "@prisma/client";
+import { hashPassword } from "../src/server/auth/password";
 
 const db = new PrismaClient();
+
+// بيانات دخول المالك الافتراضية — تُنشأ مرة واحدة فقط إن لم يوجد الحساب
+// أصلاً (upsert)، ويُفترض تغيير كلمة المرور فوراً من الإعدادات بعد أول دخول.
+const OWNER_EMAIL = "saud09426@gmail.com";
+const OWNER_DEFAULT_PASSWORD = "Fnjn-Coffee-2026!";
 
 // كتالوج تجريبي لمتجر "فنجان" — قهوة مختصة وماتشا فاخرة وأدوات تحضير.
 const CATEGORIES = [
@@ -94,7 +100,11 @@ async function main() {
     db.category.deleteMany(), db.brand.deleteMany(),
     db.address.deleteMany(), db.customer.deleteMany(),
     db.coupon.deleteMany(), db.shippingRate.deleteMany(), db.shippingZone.deleteMany(),
-    db.auditLog.deleteMany(), db.adminUser.deleteMany(), db.setting.deleteMany(),
+    db.auditLog.deleteMany(),
+    // ⚠️ عمداً لا نحذف adminUser ولا setting هنا: تحتوي كلمة مرور حقيقية
+    // وإعدادات دفع حقيقية (بيانات الحساب البنكي) قد يكون المستخدم غيّرها
+    // من لوحة التحكم — إعادة تشغيل هذا السكريبت لتحديث الكتالوج التجريبي
+    // يجب ألا يمسح حساب الدخول أو الإعدادات الحقيقية.
   ]);
 
   console.log("📁 التصنيفات…");
@@ -207,15 +217,24 @@ async function main() {
     });
   }
 
-  console.log("⚙️  المستخدم الإداري والإعدادات…");
-  await db.adminUser.create({
-    data: {
-      email: "admin@example.com", name: "مدير المتجر", role: AdminRole.OWNER,
-      // كلمة مرور تجريبية للتطوير فقط — تُستبدل بتجزئة Argon2 في المرحلة ٣
-      passwordHash: "REPLACE_ME_IN_PHASE_3",
-    },
-  });
+  console.log("⚙️  المستخدم الإداري والإعدادات (بدون استبدال بيانات حقيقية موجودة)…");
+  const existingOwner = await db.adminUser.findUnique({ where: { email: OWNER_EMAIL } });
+  if (!existingOwner) {
+    await db.adminUser.create({
+      data: {
+        email: OWNER_EMAIL,
+        name: "مدير المتجر",
+        role: AdminRole.OWNER,
+        passwordHash: await hashPassword(OWNER_DEFAULT_PASSWORD),
+      },
+    });
+    console.log(`   ↳ حساب مالك جديد: ${OWNER_EMAIL} — غيّر كلمة المرور فوراً من الإعدادات`);
+  } else {
+    console.log(`   ↳ حساب المالك موجود مسبقاً (${OWNER_EMAIL}) — لم تُغيَّر كلمة المرور`);
+  }
+
   await db.setting.createMany({
+    skipDuplicates: true,
     data: [
       { key: "store.name", value: "فنجان" },
       { key: "store.tagline", value: "قهوة مختصة وماتشا فاخرة" },

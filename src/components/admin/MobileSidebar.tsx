@@ -5,12 +5,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { ADMIN_NAV } from "@/components/admin/nav";
+import { ADMIN_ROLE_LABEL } from "@/lib/constants";
+import { logoutAction } from "@/server/auth/actions";
+import type { SessionPayload } from "@/server/auth/session";
 
 /**
  * تنقّل لوحة التحكم على الجوال: زر همبرغر عائم + قائمة منسدلة من الجانب.
  * الشريط الجانبي الثابت (Sidebar.tsx) مخفي تحت lg، فهذا المكوّن يعوّضه.
  */
-export function MobileSidebar() {
+export function MobileSidebar({ session }: { session: SessionPayload }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -106,13 +109,35 @@ export function MobileSidebar() {
           })}
         </nav>
 
-        <div className="border-t p-3">
+        <div className="space-y-1 border-t p-3">
+          <div className="flex items-center gap-2.5 rounded-xl px-3 py-2.5">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-100 text-sm font-bold text-brand-700 dark:bg-brand-900 dark:text-brand-300">
+              {session.name.slice(0, 1)}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-semibold leading-tight">{session.name}</p>
+              <p className="text-[11px] text-muted leading-tight">{ADMIN_ROLE_LABEL[session.role] ?? session.role}</p>
+            </div>
+          </div>
+
           <Link href="/" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted hover:bg-ink-100 dark:hover:bg-ink-800">
             <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 shrink-0 stroke-current">
               <path d="M15 18l-6-6 6-6" />
             </svg>
             عودة للمتجر
           </Link>
+
+          <form action={logoutAction}>
+            <button
+              type="submit"
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
+            >
+              <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 shrink-0 stroke-current">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+              </svg>
+              تسجيل الخروج
+            </button>
+          </form>
         </div>
       </aside>
     </>

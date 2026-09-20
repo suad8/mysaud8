@@ -31,3 +31,9 @@ export const PRODUCT_STATUS = {
   ACTIVE:   { label: "منشور",   tone: "green" },
   ARCHIVED: { label: "مؤرشف",   tone: "amber" },
 } as const;
+
+export const ADMIN_ROLE_LABEL: Record<string, string> = {
+  OWNER: "مالك",
+  MANAGER: "مدير",
+  STAFF: "موظف",
+};
