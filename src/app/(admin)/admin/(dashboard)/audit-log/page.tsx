@@ -29,6 +29,12 @@ const ACTION_LABEL: Record<string, string> = {
   "coupon.created": "إنشاء كوبون",
   "coupon.toggled": "تفعيل/تعطيل كوبون",
   "coupon.deleted": "حذف كوبون",
+  "shippingZone.created": "إنشاء منطقة شحن",
+  "shippingZone.toggled": "تفعيل/تعطيل منطقة شحن",
+  "shippingZone.deleted": "حذف منطقة شحن",
+  "shippingRate.created": "إنشاء سعر شحن",
+  "shippingRate.toggled": "تفعيل/تعطيل سعر شحن",
+  "shippingRate.deleted": "حذف سعر شحن",
 };
 
 const ACTION_TONE: Record<string, BadgeTone> = {

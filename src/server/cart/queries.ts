@@ -60,6 +60,16 @@ export async function getCartLines(): Promise<CartLine[]> {
     }));
 }
 
+/** كود الخصم المطبَّق حالياً على السلة، إن وُجد — للعرض فقط؛ التحقق النهائي دائماً عبر validateCoupon. */
+export async function getCartCouponCode(): Promise<string | null> {
+  const sessionId = await getCartSessionId();
+  if (!sessionId) return null;
+
+  const cart = await db.cart.findUnique({ where: { sessionId }, select: { status: true, couponCode: true } });
+  if (!cart || cart.status !== "ACTIVE") return null;
+  return cart.couponCode;
+}
+
 export async function getCartItemCount(): Promise<number> {
   const sessionId = await getCartSessionId();
   if (!sessionId) return 0;

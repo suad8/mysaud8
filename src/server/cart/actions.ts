@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/server/db";
 import { getCartSessionId, getOrCreateCartSessionId } from "@/server/cart/session";
+import { getCartLines } from "@/server/cart/queries";
+import { validateCoupon } from "@/server/discounts/validate";
 
 export type CartActionState = { error?: string; success?: boolean };
 
@@ -99,4 +101,33 @@ export async function removeCartItemAction(itemId: string, _formData: FormData) 
 
   revalidatePath("/cart");
   revalidatePath("/", "layout");
+}
+
+export async function applyCouponAction(_prevState: CartActionState, formData: FormData): Promise<CartActionState> {
+  const code = String(formData.get("code") ?? "").trim();
+  if (!code) return { error: "أدخل كود الخصم" };
+
+  const lines = await getCartLines();
+  if (lines.length === 0) return { error: "سلتك فارغة" };
+  const subtotal = lines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
+
+  const result = await validateCoupon(code, subtotal);
+  if ("error" in result) return { error: result.error };
+
+  const sessionId = await getOrCreateCartSessionId();
+  await db.cart.update({ where: { sessionId }, data: { couponCode: result.coupon.code } });
+
+  revalidatePath("/cart");
+  revalidatePath("/checkout");
+  return { success: true };
+}
+
+export async function removeCouponAction(_formData: FormData) {
+  const sessionId = await getCartSessionId();
+  if (!sessionId) return;
+
+  await db.cart.updateMany({ where: { sessionId }, data: { couponCode: null } });
+
+  revalidatePath("/cart");
+  revalidatePath("/checkout");
 }

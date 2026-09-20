@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/server/db";
 import { saveUploadedFile, UploadError } from "@/lib/uploads";
-import { createOrderFromCheckout, StockError } from "@/server/orders/create";
+import { createOrderFromCheckout, ShippingError, StockError } from "@/server/orders/create";
 import { requireAdmin } from "@/server/auth/session";
 import { logAudit } from "@/server/audit/log";
 import { getClientIp } from "@/lib/request-ip";
@@ -102,7 +102,10 @@ export async function createOrderAction(
     return { fieldErrors, values };
   }
 
-  const shippingMethod = formData.get("shippingMethod") === "express" ? "express" : "standard";
+  const shippingRateId = String(formData.get("shippingRateId") ?? "");
+  if (!shippingRateId) {
+    return { error: "يرجى اختيار طريقة الشحن", values };
+  }
 
   let orderNumber: string;
   try {
@@ -116,13 +119,13 @@ export async function createOrderAction(
         street: String(formData.get("street")),
         notes: String(formData.get("notes") ?? "") || undefined,
       },
-      shippingMethod,
+      shippingRateId,
       paymentMethod,
       receiptUrl,
     });
     orderNumber = order.number;
   } catch (e) {
-    if (e instanceof StockError) return { error: e.message, values };
+    if (e instanceof StockError || e instanceof ShippingError) return { error: e.message, values };
     if (e instanceof Error && e.message === "السلة فارغة") {
       return { error: "سلتك فارغة — أضف منتجات قبل إتمام الطلب.", values };
     }
@@ -184,6 +187,11 @@ export async function rejectBankPaymentAction(orderId: string, formData: FormDat
       await tx.inventoryMovement.create({
         data: { inventoryId: inventory.id, delta: item.quantity, reason: "استرجاع مخزون — رفض إيصال تحويل", reference: order.number },
       });
+    }
+
+    // إعادة عدّاد استخدام الكوبون — لم يكتمل الشراء فعلياً فلا يُحتسب عليه
+    if (order.couponCode) {
+      await tx.coupon.updateMany({ where: { code: order.couponCode, usageCount: { gt: 0 } }, data: { usageCount: { decrement: 1 } } });
     }
   });
   await logAudit({ actorId: session.sub, action: "payment.rejected", entity: "Order", entityId: order.id, diff: { reason: note } });

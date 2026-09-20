@@ -2,19 +2,17 @@ import { db } from "@/server/db";
 import { calculateTotals } from "@/server/cart/pricing";
 import { getCartLines } from "@/server/cart/queries";
 import { getCartSessionId } from "@/server/cart/session";
+import { validateCoupon, couponToDiscountInput } from "@/server/discounts/validate";
 import { PaymentMethod, PaymentStatus, OrderStatus, Prisma } from "@prisma/client";
 
 /** يُرمى عند نفاد مخزون سطر بالسلة عند إنشاء الطلب — رسالة مخصّصة تُعرض للعميل بدل خطأ عام. */
 export class StockError extends Error {}
 
+/** يُرمى عند اختيار سعر شحن غير موجود أو مُعطَّل — لا يُعتمَد أبداً على سعر يرسله المتصفح مباشرة. */
+export class ShippingError extends Error {}
+
 export async function getCheckoutLines() {
   return getCartLines();
-}
-
-export async function getCheckoutTotals(shippingMethod: "standard" | "express") {
-  const lines = await getCheckoutLines();
-  const shippingRate = shippingMethod === "express" ? 40 : 20;
-  return calculateTotals({ lines, shippingRate, freeShippingAbove: shippingMethod === "express" ? null : 200 });
 }
 
 /**
@@ -47,7 +45,7 @@ export type CheckoutContact = {
 
 export type CreateOrderInput = {
   contact: CheckoutContact;
-  shippingMethod: "standard" | "express";
+  shippingRateId: string;
   paymentMethod: Extract<PaymentMethod, "BANK_TRANSFER" | "COD">;
   receiptUrl?: string | null;
 };
@@ -65,23 +63,45 @@ export async function createOrderFromCheckout(input: CreateOrderInput) {
     }
   }
 
-  const shippingRate = input.shippingMethod === "express" ? 40 : 20;
+  // سعر الشحن يُعاد جلبه من القاعدة دائماً بمعرّفه — لا يُوثَق بسعر قد يُرسَل من المتصفح مباشرة
+  const rate = await db.shippingRate.findUnique({ where: { id: input.shippingRateId }, select: { isActive: true, price: true, freeAbove: true, zone: { select: { isActive: true } } } });
+  if (!rate || !rate.isActive || !rate.zone.isActive) {
+    throw new ShippingError("طريقة الشحن المختارة لم تعد متاحة، يرجى اختيار طريقة أخرى.");
+  }
+
+  const subtotal = lines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
+  const sessionId = await getCartSessionId();
+  const cart = sessionId ? await db.cart.findUnique({ where: { sessionId }, select: { id: true, couponCode: true } }) : null;
+
+  // التحقق النهائي من الكوبون هنا فقط — يُسقَط بصمت إن لم يعد صالحاً بدل رفض الطلب كاملاً
+  const couponResult = cart?.couponCode ? await validateCoupon(cart.couponCode, subtotal) : null;
+  const validCoupon = couponResult && "coupon" in couponResult ? couponResult.coupon : null;
+
   const totals = calculateTotals({
     lines,
-    shippingRate,
-    freeShippingAbove: input.shippingMethod === "express" ? null : 200,
+    discount: validCoupon ? couponToDiscountInput(validCoupon) : null,
+    shippingRate: Number(rate.price),
+    freeShippingAbove: rate.freeAbove == null ? null : Number(rate.freeAbove),
   });
 
   const { contact } = input;
-  const sessionId = await getCartSessionId();
 
   for (let attempt = 1; attempt <= MAX_ORDER_NUMBER_RETRIES; attempt++) {
     const number = await generateOrderNumber();
     try {
       return await db.$transaction(async (tx) => {
+        // ربط الطلب بسجل عميل حقيقي (زائر) بالبحث برقم الجوال — يجعل صفحة
+        // "العملاء" بلوحة التحكم تعكس عملاء حقيقيين بدل البقاء فارغة دائماً
+        const customer = await tx.customer.upsert({
+          where: { phone: contact.phone },
+          create: { phone: contact.phone, name: contact.name, email: contact.email || null, isGuest: true },
+          update: { name: contact.name },
+        });
+
         const order = await tx.order.create({
           data: {
             number,
+            customerId: customer.id,
             email: contact.email || null,
             phone: contact.phone,
             shipToName: contact.name,
@@ -94,6 +114,7 @@ export async function createOrderFromCheckout(input: CreateOrderInput) {
             shippingTotal: totals.shippingTotal,
             taxTotal: totals.taxTotal,
             grandTotal: totals.grandTotal,
+            couponCode: validCoupon?.code ?? null,
             status: OrderStatus.PENDING,
             items: {
               create: lines.map((l) => ({
@@ -143,13 +164,14 @@ export async function createOrderFromCheckout(input: CreateOrderInput) {
           });
         }
 
+        if (validCoupon) {
+          await tx.coupon.update({ where: { id: validCoupon.id }, data: { usageCount: { increment: 1 } } });
+        }
+
         // إفراغ السلة وتحويلها بعد نجاح الطلب — تبدأ سلة جديدة فارغة للزيارة القادمة
-        if (sessionId) {
-          const cart = await tx.cart.findUnique({ where: { sessionId }, select: { id: true } });
-          if (cart) {
-            await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
-            await tx.cart.update({ where: { id: cart.id }, data: { status: "CONVERTED" } });
-          }
+        if (cart) {
+          await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
+          await tx.cart.update({ where: { id: cart.id }, data: { status: "CONVERTED" } });
         }
 
         return order;

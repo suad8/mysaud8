@@ -2,14 +2,15 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Price } from "@/components/ui/Price";
+import { CouponForm } from "@/components/storefront/CouponForm";
 import { calculateTotals } from "@/server/cart/pricing";
-import { getCartLines } from "@/server/cart/queries";
+import { getCartCouponCode, getCartLines } from "@/server/cart/queries";
 import { decrementCartItemAction, incrementCartItemAction, removeCartItemAction } from "@/server/cart/actions";
+import { validateCoupon, couponToDiscountInput } from "@/server/discounts/validate";
+import { getActiveShippingZones } from "@/server/shipping/queries";
 
 export default async function CartPage() {
-  const lines = await getCartLines();
-  const totals = calculateTotals({ lines, shippingRate: 20, freeShippingAbove: 200 });
-  const remainingForFreeShipping = Math.max(0, 200 - totals.subtotal);
+  const [lines, couponCode, zones] = await Promise.all([getCartLines(), getCartCouponCode(), getActiveShippingZones()]);
 
   if (lines.length === 0) {
     return (
@@ -20,6 +21,20 @@ export default async function CartPage() {
       </div>
     );
   }
+
+  const subtotal = lines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
+  const couponResult = couponCode ? await validateCoupon(couponCode, subtotal) : null;
+  const validCoupon = couponResult && "coupon" in couponResult ? couponResult.coupon : null;
+
+  // تقدير الشحن هنا فقط للعرض التقريبي (لا نعرف مدينة العميل بعد) — يُحسَم فعلياً بصفحة الدفع
+  const defaultRate = zones[0]?.rates[0] ?? null;
+  const totals = calculateTotals({
+    lines,
+    discount: validCoupon ? couponToDiscountInput(validCoupon) : null,
+    shippingRate: defaultRate?.price ?? 0,
+    freeShippingAbove: defaultRate?.freeAbove ?? null,
+  });
+  const remainingForFreeShipping = defaultRate?.freeAbove != null ? Math.max(0, defaultRate.freeAbove - totals.subtotal) : 0;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
@@ -76,9 +91,8 @@ export default async function CartPage() {
         <aside className="surface-card h-fit p-5">
           <h2 className="text-sm font-semibold">ملخص الطلب</h2>
 
-          <div className="mt-4 flex gap-2">
-            <input placeholder="كود الخصم" className="h-10 flex-1 rounded-lg border bg-transparent px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500/40" />
-            <Button variant="secondary" size="sm" className="h-10">تطبيق</Button>
+          <div className="mt-4">
+            <CouponForm appliedCode={validCoupon?.code ?? null} />
           </div>
 
           <dl className="mt-5 space-y-2.5 border-t pt-5 text-sm">
@@ -87,14 +101,14 @@ export default async function CartPage() {
               <div className="flex justify-between text-brand-700"><dt>الخصم</dt><dd>−<Price value={totals.discountTotal} /></dd></div>
             )}
             <div className="flex justify-between">
-              <dt className="text-muted">الشحن</dt>
+              <dt className="text-muted">الشحن (تقديري)</dt>
               <dd>{totals.shippingTotal === 0 ? <span className="text-brand-700">مجاني</span> : <Price value={totals.shippingTotal} />}</dd>
             </div>
             <div className="flex justify-between text-xs text-muted"><dt>شامل ضريبة القيمة المضافة</dt><dd><Price value={totals.taxTotal} /></dd></div>
           </dl>
 
           <div className="mt-4 flex justify-between border-t pt-4 text-base font-bold">
-            <span>الإجمالي</span>
+            <span>الإجمالي التقديري</span>
             <Price value={totals.grandTotal} size="lg" />
           </div>
 

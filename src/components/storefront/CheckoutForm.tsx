@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import { Price } from "@/components/ui/Price";
 import { Button } from "@/components/ui/Button";
 import { createOrderAction, type CheckoutFormState } from "@/server/orders/actions";
-import type { Totals } from "@/server/cart/pricing";
+import { calculateTotals, type DiscountInput } from "@/server/cart/pricing";
+import { matchZoneForCity, type ShippingZoneWithRates } from "@/server/shipping/match";
 import type { BankTransferSettings } from "@/server/settings";
 
 type Line = { nameAr: string; unitPrice: number; quantity: number };
@@ -27,25 +28,37 @@ const STEPS = [
 
 export function CheckoutForm({
   lines,
-  standardTotals,
-  expressTotals,
+  zones,
+  discount,
+  couponCode,
   bankSettings,
 }: {
   lines: Line[];
-  standardTotals: Totals;
-  expressTotals: Totals;
+  zones: ShippingZoneWithRates[];
+  discount: DiscountInput | null;
+  couponCode: string | null;
   bankSettings: BankTransferSettings;
 }) {
   const [state, formAction, isPending] = useActionState(createOrderAction, initialState);
-  const [shipping, setShipping] = useState<"standard" | "express">("standard");
   const [payment, setPayment] = useState<PaymentKey>("BANK_TRANSFER");
   const [copied, setCopied] = useState<string | null>(null);
   const [receiptName, setReceiptName] = useState<string | null>(null);
   const [step, setStep] = useState<1 | 2>(1);
   const [phone, setPhone] = useState("");
   const [phoneTouched, setPhoneTouched] = useState(false);
+  const [city, setCity] = useState("");
+  const [selectedRateId, setSelectedRateId] = useState<string | null>(null);
 
-  const totals = shipping === "express" ? expressTotals : standardTotals;
+  const matchedZone = useMemo(() => matchZoneForCity(zones, city), [zones, city]);
+  const activeRateId = selectedRateId && matchedZone?.rates.some((r) => r.id === selectedRateId) ? selectedRateId : (matchedZone?.rates[0]?.id ?? null);
+  const selectedRate = matchedZone?.rates.find((r) => r.id === activeRateId) ?? null;
+
+  const totals = calculateTotals({
+    lines,
+    discount,
+    shippingRate: selectedRate?.price ?? 0,
+    freeShippingAbove: selectedRate?.freeAbove ?? null,
+  });
 
   function copy(value: string, key: string) {
     if (!value) return;
@@ -111,8 +124,8 @@ export function CheckoutForm({
               متابعة للدفع
             </Button>
             <div className="mt-4 flex items-center justify-between border-t pt-4 text-sm">
-              <span className="text-muted">الإجمالي المتوقع</span>
-              <Price value={totals.grandTotal} />
+              <span className="text-muted">المجموع الفرعي</span>
+              <Price value={totals.subtotal} />
             </div>
           </div>
         </div>
@@ -121,6 +134,7 @@ export function CheckoutForm({
       {/* الخطوة ٢: باقي بيانات التوصيل وطريقة الدفع، ثم إتمام الطلب فعلياً */}
       {step === 2 && (
         <form action={formAction} className="mt-8 grid gap-8 lg:grid-cols-3">
+      <input type="hidden" name="shippingRateId" value={activeRateId ?? ""} />
       <div className="space-y-6 lg:col-span-2">
         <button type="button" onClick={() => setStep(1)} className="text-sm font-medium text-brand-700 hover:underline">
           → تعديل رقم الجوال
@@ -139,7 +153,17 @@ export function CheckoutForm({
             <Field name="name" label="الاسم الكامل" placeholder="مثال: سارة العتيبي" defaultValue={state.values?.name} error={err("name")} autoFocus />
             <Field name="phone" label="رقم الجوال" placeholder="05xxxxxxxx" type="tel" defaultValue={state.values?.phone ?? phone} error={err("phone")} />
             <Field name="email" label="البريد الإلكتروني (اختياري)" placeholder="example@mail.com" type="email" defaultValue={state.values?.email} className="sm:col-span-2" />
-            <Field name="city" label="المدينة" placeholder="الرياض" defaultValue={state.values?.city} error={err("city")} />
+            <Field
+              name="city"
+              label="المدينة"
+              placeholder="الرياض"
+              defaultValue={state.values?.city}
+              error={err("city")}
+              onChange={(e) => {
+                setCity(e.target.value);
+                setSelectedRateId(null);
+              }}
+            />
             <Field name="district" label="الحي (اختياري)" placeholder="حي النخيل" defaultValue={state.values?.district} />
             <Field name="street" label="العنوان التفصيلي" placeholder="اسم الشارع، رقم المبنى" className="sm:col-span-2" defaultValue={state.values?.street} error={err("street")} />
             <Field name="notes" label="ملاحظات إضافية (اختياري)" placeholder="تفاصيل توصيل إضافية" className="sm:col-span-2" defaultValue={state.values?.notes} />
@@ -149,33 +173,39 @@ export function CheckoutForm({
         {/* طريقة الشحن */}
         <section className="surface-card p-5">
           <h2 className="text-sm font-semibold">طريقة الشحن</h2>
-          <div className="mt-4 space-y-2.5">
-            {[
-              { value: "standard" as const, label: "توصيل عادي", desc: "خلال 2–4 أيام عمل", price: standardTotals.shippingTotal === 0 ? "مجاني" : null, amount: standardTotals.shippingTotal },
-              { value: "express" as const, label: "توصيل سريع", desc: "خلال يوم عمل واحد", price: null, amount: expressTotals.shippingTotal },
-            ].map((opt) => (
-              <label
-                key={opt.value}
-                className={`flex cursor-pointer items-center justify-between rounded-xl border p-4 ${shipping === opt.value ? "border-brand-600 bg-brand-50 dark:bg-brand-950" : ""}`}
-              >
-                <div className="flex items-center gap-3">
-                  <input
-                    type="radio"
-                    name="shippingMethod"
-                    value={opt.value}
-                    checked={shipping === opt.value}
-                    onChange={() => setShipping(opt.value)}
-                    className="h-4 w-4 accent-brand-600"
-                  />
-                  <div>
-                    <p className="text-sm font-medium">{opt.label}</p>
-                    <p className="text-xs text-muted">{opt.desc}</p>
-                  </div>
-                </div>
-                <span className="num text-sm font-semibold">{opt.price ?? <Price value={opt.amount} size="sm" />}</span>
-              </label>
-            ))}
-          </div>
+          {matchedZone && matchedZone.rates.length > 0 ? (
+            <div className="mt-4 space-y-2.5">
+              {matchedZone.rates.map((rate) => {
+                const rateTotals = calculateTotals({ lines, discount, shippingRate: rate.price, freeShippingAbove: rate.freeAbove });
+                return (
+                  <label
+                    key={rate.id}
+                    className={`flex cursor-pointer items-center justify-between rounded-xl border p-4 ${activeRateId === rate.id ? "border-brand-600 bg-brand-50 dark:bg-brand-950" : ""}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="radio"
+                        checked={activeRateId === rate.id}
+                        onChange={() => setSelectedRateId(rate.id)}
+                        className="h-4 w-4 accent-brand-600"
+                      />
+                      <div>
+                        <p className="text-sm font-medium">{rate.nameAr}</p>
+                        {(rate.minDays || rate.maxDays) && (
+                          <p className="text-xs text-muted">خلال {rate.minDays ?? "?"}–{rate.maxDays ?? "?"} أيام عمل</p>
+                        )}
+                      </div>
+                    </div>
+                    <span className="num text-sm font-semibold">
+                      {rateTotals.shippingTotal === 0 ? "مجاني" : <Price value={rateTotals.shippingTotal} size="sm" />}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-muted">أدخل مدينتك أعلاه لعرض خيارات الشحن المتاحة.</p>
+          )}
         </section>
 
         {/* طريقة الدفع */}
@@ -265,9 +295,15 @@ export function CheckoutForm({
         </ul>
         <dl className="mt-4 space-y-2.5 border-t pt-4 text-sm">
           <div className="flex justify-between"><dt className="text-muted">المجموع الفرعي</dt><dd><Price value={totals.subtotal} /></dd></div>
+          {totals.discountTotal > 0 && (
+            <div className="flex justify-between text-brand-700">
+              <dt>الخصم{couponCode ? ` (${couponCode})` : ""}</dt>
+              <dd>−<Price value={totals.discountTotal} /></dd>
+            </div>
+          )}
           <div className="flex justify-between">
             <dt className="text-muted">الشحن</dt>
-            <dd>{totals.shippingTotal === 0 ? <span className="text-brand-700">مجاني</span> : <Price value={totals.shippingTotal} />}</dd>
+            <dd>{!selectedRate ? "—" : totals.shippingTotal === 0 ? <span className="text-brand-700">مجاني</span> : <Price value={totals.shippingTotal} />}</dd>
           </div>
           <div className="flex justify-between text-xs text-muted"><dt>شامل ضريبة القيمة المضافة</dt><dd><Price value={totals.taxTotal} /></dd></div>
         </dl>
@@ -275,7 +311,7 @@ export function CheckoutForm({
           <span>الإجمالي</span>
           <Price value={totals.grandTotal} size="lg" />
         </div>
-        <Button type="submit" size="lg" className="mt-5 w-full" disabled={isPending}>
+        <Button type="submit" size="lg" className="mt-5 w-full" disabled={isPending || !activeRateId}>
           {isPending ? "جارٍ إرسال الطلب…" : "تأكيد الطلب"}
         </Button>
         <p className="mt-3 text-center text-[11px] text-muted">بالمتابعة أنت توافق على الشروط والأحكام</p>
