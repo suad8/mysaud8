@@ -8,7 +8,8 @@ import { createOrderFromCheckout, ShippingError, StockError } from "@/server/ord
 import { requireAdmin } from "@/server/auth/session";
 import { logAudit } from "@/server/audit/log";
 import { getClientIp } from "@/lib/request-ip";
-import { OrderStatus, PaymentStatus } from "@prisma/client";
+import { OrderStatus, PaymentStatus, Prisma } from "@prisma/client";
+import { ORDER_STATUS, type OrderStatusKey } from "@/lib/constants";
 
 export type CheckoutContactValues = {
   name?: string;
@@ -158,6 +159,34 @@ export async function confirmBankPaymentAction(orderId: string, _formData: FormD
   revalidatePath("/admin");
 }
 
+type OrderItemForRestore = { variantId: string | null; quantity: number };
+
+/**
+ * يعيد المخزون المخصوم عند إنشاء الطلب وعدّاد استخدام الكوبون — مشتركة بين
+ * رفض إيصال تحويل وإلغاء الطلب، فكلاهما يعني أن البيع لم يكتمل فعلياً.
+ */
+async function restoreOrderStockAndCoupon(
+  tx: Prisma.TransactionClient,
+  order: { number: string; couponCode: string | null; items: OrderItemForRestore[] },
+  reason: string,
+) {
+  for (const item of order.items) {
+    if (!item.variantId) continue;
+    const inventory = await tx.inventoryItem.update({
+      where: { variantId: item.variantId },
+      data: { onHand: { increment: item.quantity } },
+      select: { id: true },
+    });
+    await tx.inventoryMovement.create({
+      data: { inventoryId: inventory.id, delta: item.quantity, reason, reference: order.number },
+    });
+  }
+
+  if (order.couponCode) {
+    await tx.coupon.updateMany({ where: { code: order.couponCode, usageCount: { gt: 0 } }, data: { usageCount: { decrement: 1 } } });
+  }
+}
+
 /**
  * لوحة التحكم: رفض إيصال غير صحيح أو غير واضح.
  * مربوطة كـ Server Action بمعرّف الطلب عبر .bind، فتستقبل FormData
@@ -175,27 +204,111 @@ export async function rejectBankPaymentAction(orderId: string, formData: FormDat
   await db.$transaction(async (tx) => {
     await tx.payment.update({ where: { id: payment.id }, data: { status: PaymentStatus.FAILED, failureReason: note } });
     await tx.orderEvent.create({ data: { orderId: order.id, message: `تم رفض إيصال التحويل: ${note}` } });
-
-    // إعادة المخزون المخصوم عند إنشاء الطلب — الدفع لم يكتمل فعلياً فلا يبقى محجوزاً
-    for (const item of order.items) {
-      if (!item.variantId) continue;
-      const inventory = await tx.inventoryItem.update({
-        where: { variantId: item.variantId },
-        data: { onHand: { increment: item.quantity } },
-        select: { id: true },
-      });
-      await tx.inventoryMovement.create({
-        data: { inventoryId: inventory.id, delta: item.quantity, reason: "استرجاع مخزون — رفض إيصال تحويل", reference: order.number },
-      });
-    }
-
-    // إعادة عدّاد استخدام الكوبون — لم يكتمل الشراء فعلياً فلا يُحتسب عليه
-    if (order.couponCode) {
-      await tx.coupon.updateMany({ where: { code: order.couponCode, usageCount: { gt: 0 } }, data: { usageCount: { decrement: 1 } } });
-    }
+    await restoreOrderStockAndCoupon(tx, order, "استرجاع مخزون — رفض إيصال تحويل");
   });
   await logAudit({ actorId: session.sub, action: "payment.rejected", entity: "Order", entityId: order.id, diff: { reason: note } });
 
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath("/admin/orders");
+}
+
+const NEXT_STATUS: Partial<Record<OrderStatusKey, OrderStatusKey>> = {
+  PENDING: "PAID",
+  PAID: "PROCESSING",
+  PROCESSING: "SHIPPED",
+  SHIPPED: "DELIVERED",
+};
+
+const STATUS_EVENT_MESSAGE: Partial<Record<OrderStatusKey, string>> = {
+  PAID: "تم تأكيد الدفع",
+  PROCESSING: "الطلب قيد التجهيز",
+  SHIPPED: "تم شحن الطلب",
+  DELIVERED: "تم تسليم الطلب للعميل",
+};
+
+/**
+ * لوحة التحكم: نقل الطلب لحالته التالية في التسلسل (PENDING→PAID→PROCESSING→SHIPPED→DELIVERED).
+ * التحقّق من صحة الانتقال يُعاد حسابه من حالة الطلب الفعلية بالخادم، لا يُوثَق بما يُرسله الزر مباشرة.
+ * مربوطة بمعرّف الطلب والحالة المستهدفة عبر .bind.
+ */
+export async function updateOrderStatusAction(orderId: string, targetStatus: OrderStatusKey, _formData: FormData) {
+  const session = await requireAdmin();
+  const order = await db.order.findUnique({ where: { id: orderId }, select: { status: true, number: true } });
+  if (!order) return;
+
+  const expectedNext = NEXT_STATUS[order.status as OrderStatusKey];
+  if (expectedNext !== targetStatus) return; // انتقال غير صالح من الحالة الحالية — يُتجاهَل بصمت
+
+  await db.$transaction(async (tx) => {
+    await tx.order.update({
+      where: { id: orderId },
+      data: { status: targetStatus, paidAt: targetStatus === "PAID" ? new Date() : undefined },
+    });
+    await tx.orderEvent.create({
+      data: { orderId, message: STATUS_EVENT_MESSAGE[targetStatus] ?? "تحديث حالة الطلب", status: targetStatus as OrderStatus },
+    });
+
+    if (targetStatus === "SHIPPED") {
+      const existing = await tx.shipment.findFirst({ where: { orderId } });
+      if (!existing) {
+        await tx.shipment.create({ data: { orderId, carrier: "شركة الشحن", shippedAt: new Date() } });
+      } else if (!existing.shippedAt) {
+        await tx.shipment.update({ where: { id: existing.id }, data: { shippedAt: new Date() } });
+      }
+    }
+    if (targetStatus === "DELIVERED") {
+      const existing = await tx.shipment.findFirst({ where: { orderId } });
+      if (existing && !existing.deliveredAt) {
+        await tx.shipment.update({ where: { id: existing.id }, data: { deliveredAt: new Date() } });
+      }
+    }
+  });
+  await logAudit({ actorId: session.sub, action: "order.statusUpdated", entity: "Order", entityId: orderId, diff: { from: order.status, to: targetStatus } });
+
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath("/admin/orders");
+  revalidatePath("/admin");
+}
+
+const CANCELLABLE_STATUSES: OrderStatusKey[] = ["PENDING", "PAID", "PROCESSING"];
+
+/**
+ * لوحة التحكم: إلغاء طلب لم يُشحَن بعد — يعيد المخزون وعدّاد الكوبون تلقائياً.
+ * مربوطة بمعرّف الطلب عبر .bind، تستقبل FormData من <form> (حقل "reason").
+ */
+export async function cancelOrderAction(orderId: string, formData: FormData) {
+  const session = await requireAdmin();
+  const order = await db.order.findUnique({ where: { id: orderId }, include: { items: true } });
+  if (!order || !CANCELLABLE_STATUSES.includes(order.status as OrderStatusKey)) return;
+
+  const reason = String(formData.get("reason") ?? "").trim() || "إلغاء بطلب من فريق المتجر";
+
+  await db.$transaction(async (tx) => {
+    await tx.order.update({ where: { id: orderId }, data: { status: OrderStatus.CANCELLED, cancelledAt: new Date() } });
+    await tx.orderEvent.create({ data: { orderId, message: `تم إلغاء الطلب: ${reason}`, status: OrderStatus.CANCELLED } });
+    await restoreOrderStockAndCoupon(tx, order, "استرجاع مخزون — إلغاء طلب");
+  });
+  await logAudit({ actorId: session.sub, action: "order.cancelled", entity: "Order", entityId: orderId, diff: { reason } });
+
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath("/admin/orders");
+  revalidatePath("/admin");
+}
+
+/**
+ * لوحة التحكم: تحديث بيانات تتبّع الشحنة (الناقل ورقم التتبّع) بعد إنشائها تلقائياً عند الشحن.
+ */
+export async function updateShipmentTrackingAction(orderId: string, formData: FormData) {
+  const session = await requireAdmin();
+  const shipment = await db.shipment.findFirst({ where: { orderId } });
+  if (!shipment) return;
+
+  const carrier = String(formData.get("carrier") ?? "").trim() || shipment.carrier;
+  const trackingNo = String(formData.get("trackingNo") ?? "").trim() || null;
+  const trackingUrl = String(formData.get("trackingUrl") ?? "").trim() || null;
+
+  await db.shipment.update({ where: { id: shipment.id }, data: { carrier, trackingNo, trackingUrl } });
+  await logAudit({ actorId: session.sub, action: "shipment.updated", entity: "Shipment", entityId: shipment.id, diff: { carrier, trackingNo } });
+
+  revalidatePath(`/admin/orders/${orderId}`);
 }

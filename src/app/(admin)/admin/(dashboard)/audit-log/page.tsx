@@ -35,6 +35,9 @@ const ACTION_LABEL: Record<string, string> = {
   "shippingRate.created": "إنشاء سعر شحن",
   "shippingRate.toggled": "تفعيل/تعطيل سعر شحن",
   "shippingRate.deleted": "حذف سعر شحن",
+  "order.statusUpdated": "تحديث حالة طلب",
+  "order.cancelled": "إلغاء طلب",
+  "shipment.updated": "تحديث بيانات شحنة",
 };
 
 const ACTION_TONE: Record<string, BadgeTone> = {
@@ -48,6 +51,7 @@ const ACTION_TONE: Record<string, BadgeTone> = {
   "product.deleted": "red",
   "payment.confirmed": "green",
   "payment.rejected": "red",
+  "order.cancelled": "red",
 };
 
 export default async function AdminAuditLogPage() {

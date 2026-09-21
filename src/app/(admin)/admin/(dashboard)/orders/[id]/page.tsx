@@ -5,10 +5,13 @@ import { Topbar } from "@/components/admin/Topbar";
 import { Badge } from "@/components/ui/Badge";
 import { Price } from "@/components/ui/Price";
 import { Button } from "@/components/ui/Button";
+import { PrintInvoiceButton } from "@/components/admin/PrintInvoiceButton";
+import { CancelOrderForm } from "@/components/admin/CancelOrderForm";
+import { ShipmentTrackingForm } from "@/components/admin/ShipmentTrackingForm";
 import { db } from "@/server/db";
 import { ORDER_STATUS, PAYMENT_METHOD_LABEL, type OrderStatusKey } from "@/lib/constants";
 import { formatDateTime } from "@/lib/format";
-import { confirmBankPaymentAction, rejectBankPaymentAction } from "@/server/orders/actions";
+import { confirmBankPaymentAction, rejectBankPaymentAction, updateOrderStatusAction } from "@/server/orders/actions";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -36,6 +39,7 @@ export default async function AdminOrderDetailPage({ params }: Props) {
   const meta = ORDER_STATUS[order.status as OrderStatusKey];
   const nextStatus = NEXT_STATUS[order.status as OrderStatusKey];
   const nextMeta = nextStatus ? ORDER_STATUS[nextStatus] : null;
+  const isCancellable = (["PENDING", "PAID", "PROCESSING"] as OrderStatusKey[]).includes(order.status as OrderStatusKey);
 
   return (
     <>
@@ -43,9 +47,14 @@ export default async function AdminOrderDetailPage({ params }: Props) {
         title={`الطلب ${order.number}`}
         subtitle={formatDateTime(order.placedAt)}
         actions={
-          <div className="flex gap-2">
-            <Button variant="secondary" size="sm">طباعة الفاتورة</Button>
-            {nextMeta && <Button size="sm">نقل إلى: {nextMeta.label}</Button>}
+          <div className="flex flex-wrap gap-2">
+            <PrintInvoiceButton />
+            {isCancellable && <CancelOrderForm orderId={order.id} />}
+            {nextMeta && nextStatus && (
+              <form action={updateOrderStatusAction.bind(null, order.id, nextStatus)}>
+                <Button size="sm" type="submit">نقل إلى: {nextMeta.label}</Button>
+              </form>
+            )}
           </div>
         }
       />
@@ -119,6 +128,13 @@ export default async function AdminOrderDetailPage({ params }: Props) {
               {order.shipToCity}
             </p>
           </section>
+
+          {order.shipments.length > 0 && (
+            <section className="surface-card p-5">
+              <h2 className="text-sm font-semibold">الشحنة</h2>
+              <ShipmentTrackingForm orderId={order.id} shipment={order.shipments[0]} />
+            </section>
+          )}
 
           <section className="surface-card p-5">
             <h2 className="text-sm font-semibold">الدفع</h2>
