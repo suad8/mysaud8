@@ -85,6 +85,26 @@ export async function getProductsByCategory(
   return { category: { nameAr: category.nameAr, descAr: category.descAr }, products: rows.map(toCard) };
 }
 
+/** بحث بالاسم أو الوصف المختصر — غير حسّاس لحالة الأحرف، يكفي لحجم كتالوج متجر واحد. */
+export async function searchProducts(query: string, limit = 24): Promise<ProductCardData[]> {
+  const q = query.trim();
+  if (!q) return [];
+
+  const rows = await db.product.findMany({
+    where: {
+      ...LIVE,
+      OR: [
+        { nameAr: { contains: q, mode: "insensitive" } },
+        { shortDescAr: { contains: q, mode: "insensitive" } },
+      ],
+    },
+    select: cardSelect,
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+  return rows.map(toCard);
+}
+
 export async function getProductBySlug(slug: string) {
   const p = await db.product.findFirst({
     where: { slug, ...LIVE },

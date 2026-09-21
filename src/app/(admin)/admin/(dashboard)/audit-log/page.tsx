@@ -38,6 +38,8 @@ const ACTION_LABEL: Record<string, string> = {
   "order.statusUpdated": "تحديث حالة طلب",
   "order.cancelled": "إلغاء طلب",
   "shipment.updated": "تحديث بيانات شحنة",
+  "review.approved": "اعتماد تقييم",
+  "review.deleted": "حذف تقييم",
 };
 
 const ACTION_TONE: Record<string, BadgeTone> = {

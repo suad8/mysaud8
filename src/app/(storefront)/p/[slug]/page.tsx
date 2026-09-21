@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import { Rating } from "@/components/ui/Rating";
 import { ProductCard } from "@/components/storefront/ProductCard";
 import { ProductPurchasePanel } from "@/components/storefront/ProductPurchasePanel";
+import { ReviewForm } from "@/components/storefront/ReviewForm";
 import { getProductBySlug, getRelatedProducts } from "@/server/catalog/queries";
 import { getStoreInfoSettings } from "@/server/settings";
 import { formatDate } from "@/lib/format";
@@ -157,23 +158,32 @@ export default async function ProductPage({ params }: Props) {
       </div>
 
       {/* التقييمات */}
-      {product.reviews.length > 0 && (
-        <section className="mt-16 border-t pt-10">
-          <h2 className="text-xl font-bold">آراء العملاء</h2>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            {product.reviews.map((r) => (
-              <div key={r.id} className="surface-card p-5">
-                <div className="flex items-center justify-between">
-                  <Rating value={r.rating} />
-                  <span className="text-xs text-muted">{formatDate(r.createdAt)}</span>
-                </div>
-                <p className="mt-3 text-sm font-semibold">{r.authorName}</p>
-                {r.comment && <p className="mt-1.5 text-sm leading-relaxed text-muted">{r.comment}</p>}
+      <section className="mt-16 border-t pt-10">
+        <h2 className="text-xl font-bold">آراء العملاء</h2>
+        <div className="mt-6 grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            {product.reviews.length > 0 ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {product.reviews.map((r) => (
+                  <div key={r.id} className="surface-card p-5">
+                    <div className="flex items-center justify-between">
+                      <Rating value={r.rating} />
+                      <span className="text-xs text-muted">{formatDate(r.createdAt)}</span>
+                    </div>
+                    <p className="mt-3 text-sm font-semibold">{r.authorName}</p>
+                    {r.comment && <p className="mt-1.5 text-sm leading-relaxed text-muted">{r.comment}</p>}
+                  </div>
+                ))}
               </div>
-            ))}
+            ) : (
+              <p className="text-sm text-muted">لا توجد تقييمات بعد — كن أول من يقيّم هذا المنتج.</p>
+            )}
           </div>
-        </section>
-      )}
+          <div>
+            <ReviewForm productSlug={product.slug} />
+          </div>
+        </div>
+      </section>
 
       {/* منتجات مشابهة */}
       {related.length > 0 && (

@@ -4,6 +4,7 @@ export const ADMIN_NAV = [
   { href: "/admin/products", label: "المنتجات", icon: "M20 7L10 2 0 7v10l10 5 10-5zM10 12L0 7m10 5v10m0-10l10-5" },
   { href: "/admin/inventory", label: "المخزون", icon: "M3 7h18M3 12h18M3 17h18" },
   { href: "/admin/customers", label: "العملاء", icon: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" },
+  { href: "/admin/reviews", label: "التقييمات", icon: "M12 17.3 6.2 21l1.5-6.6L2.5 9.9l6.7-.6L12 3l2.8 6.3 6.7.6-5.2 4.5L18 21Z" },
   { href: "/admin/discounts", label: "الخصومات", icon: "M20 12l-8 8-9-9V4h7l10 8ZM7 7h.01" },
   { href: "/admin/shipping", label: "الشحن", icon: "M3 7h11v8H3zM14 10h4l3 3v2h-7z M7 18a2 2 0 100-4 2 2 0 000 4zM17 18a2 2 0 100-4 2 2 0 000 4z" },
   { href: "/admin/reports", label: "التقارير", icon: "M4 20V10m6 10V4m6 16v-7" },

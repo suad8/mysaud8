@@ -45,16 +45,17 @@ export async function Header() {
         </nav>
 
         {/* البحث */}
-        <div className="relative flex-1 lg:max-w-xs">
+        <form action="/search" className="relative flex-1 lg:max-w-xs">
           <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" className={`${ICON} pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-ink-400`}>
             <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" strokeLinecap="round" />
           </svg>
           <input
             type="search"
+            name="q"
             placeholder="ابحث عن منتج…"
             className="h-10 w-full rounded-xl border bg-[var(--surface-sunken)] ps-10 pe-3 text-sm outline-none transition-shadow placeholder:text-ink-400 focus:ring-2 focus:ring-brand-500/40"
           />
-        </div>
+        </form>
 
         <div className="flex shrink-0 items-center gap-1">
           <Link href="/account" aria-label="حسابي" className="grid h-10 w-10 place-items-center rounded-xl transition-colors hover:bg-ink-100 dark:hover:bg-ink-800">
