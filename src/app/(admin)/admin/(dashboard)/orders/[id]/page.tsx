@@ -84,7 +84,8 @@ export default async function AdminOrderDetailPage({ params }: Props) {
                         <ul className="mt-1.5 space-y-0.5">
                           {customValues.map((v, i) => (
                             <li key={i} className="text-xs text-muted">
-                              {v.type === "FILE" ? (
+                              {/* رابط فقط لملفات الرفع الداخلية — دفاع إضافي ضد أي قيمة غير متوقعة */}
+                              {v.type === "FILE" && v.value.startsWith("/api/uploads/custom-fields/") ? (
                                 <>
                                   {v.label}:{" "}
                                   <a href={v.value} target="_blank" rel="noopener noreferrer" className="font-medium text-brand-700 hover:underline">

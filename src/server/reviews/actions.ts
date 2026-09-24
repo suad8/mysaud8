@@ -22,9 +22,9 @@ export async function submitReviewAction(
     return { error: "عدد كبير من التقييمات خلال وقت قصير — يرجى المحاولة لاحقاً." };
   }
 
-  const authorName = String(formData.get("authorName") ?? "").trim();
+  const authorName = String(formData.get("authorName") ?? "").trim().slice(0, 60);
   const rating = Math.round(Number(formData.get("rating") ?? "0"));
-  const comment = String(formData.get("comment") ?? "").trim();
+  const comment = String(formData.get("comment") ?? "").trim().slice(0, 1000);
 
   if (!authorName) return { error: "الاسم مطلوب" };
   if (!rating || rating < 1 || rating > 5) return { error: "يرجى اختيار تقييم من 1 إلى 5 نجوم" };

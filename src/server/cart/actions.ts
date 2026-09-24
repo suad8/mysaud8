@@ -16,6 +16,9 @@ const MAX_CUSTOM_TEXT_LENGTH = 1000;
 
 /** رفع ملفات العملاء متاح بلا تسجيل دخول — حدّ لكل IP يمنع ملء قرص الخادم بملفات متكررة. */
 const customFileUploads = createRateLimiter({ max: 20, windowMs: 60 * 60 * 1000 });
+/** حدود سخية لا يبلغها متسوّق حقيقي — تمنع إغراق قاعدة البيانات بسلال آلية وتخمين أكواد الخصم. */
+const cartWrites = createRateLimiter({ max: 120, windowMs: 10 * 60 * 1000 });
+const couponAttempts = createRateLimiter({ max: 10, windowMs: 15 * 60 * 1000 });
 
 /**
  * يقرأ قيم الحقول المخصّصة من النموذج حسب تعريفها بالمنتج، ويرفع أي ملفات مرفقة.
@@ -73,6 +76,7 @@ async function readCustomFieldValues(formData: FormData, product: { customFields
 }
 
 export async function addToCartAction(_prevState: CartActionState, formData: FormData): Promise<CartActionState> {
+  if (!cartWrites.hit((await getClientIp()) ?? "unknown")) return { error: "محاولات كثيرة خلال وقت قصير — حاول بعد دقائق" };
   const variantId = String(formData.get("variantId") ?? "");
   const quantityRaw = Math.round(Number(formData.get("quantity") ?? "1"));
   const quantity = Number.isFinite(quantityRaw) && quantityRaw > 0 ? quantityRaw : 1;
@@ -180,8 +184,9 @@ export async function removeCartItemAction(itemId: string, _formData: FormData) 
 }
 
 export async function applyCouponAction(_prevState: CartActionState, formData: FormData): Promise<CartActionState> {
-  const code = String(formData.get("code") ?? "").trim();
+  const code = String(formData.get("code") ?? "").trim().slice(0, 40);
   if (!code) return { error: "أدخل كود الخصم" };
+  if (!couponAttempts.hit((await getClientIp()) ?? "unknown")) return { error: "محاولات كثيرة لأكواد الخصم — حاول بعد ربع ساعة" };
 
   const lines = await getCartLines();
   if (lines.length === 0) return { error: "سلتك فارغة" };

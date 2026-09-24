@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/server/db";
 import { deleteUploadedFile, saveUploadedFile, UploadError } from "@/lib/uploads";
-import { createOrderFromCheckout, ShippingError, StockError } from "@/server/orders/create";
+import { createOrderFromCheckout, CouponError, ShippingError, StockError } from "@/server/orders/create";
+import { orderAccessToken } from "@/server/orders/access";
 import { requireAdmin } from "@/server/auth/session";
 import { logAudit } from "@/server/audit/log";
 import { getClientIp } from "@/lib/request-ip";
@@ -135,14 +136,14 @@ export async function createOrderAction(
     orderNumber = order.number;
   } catch (e) {
     if (receiptUrl) await deleteUploadedFile(receiptUrl);
-    if (e instanceof StockError || e instanceof ShippingError) return { error: e.message, values };
+    if (e instanceof StockError || e instanceof ShippingError || e instanceof CouponError) return { error: e.message, values };
     if (e instanceof Error && e.message === "السلة فارغة") {
       return { error: "سلتك فارغة — أضف منتجات قبل إتمام الطلب.", values };
     }
     return { error: "حدث خطأ أثناء إنشاء الطلب، يرجى المحاولة مرة أخرى.", values };
   }
 
-  redirect(`/order/${orderNumber}`);
+  redirect(`/order/${orderNumber}?t=${orderAccessToken(orderNumber)}`);
 }
 
 /**

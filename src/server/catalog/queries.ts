@@ -63,7 +63,7 @@ export async function getFeaturedProducts(limit = 8, order: string[] = []): Prom
 const ALL_PRODUCTS_PAGE_SIZE = 24;
 
 export async function getAllProducts(opts: { sort?: string; page?: number } = {}) {
-  const page = Math.max(1, Math.floor(opts.page ?? 1));
+  const page = Math.min(10_000, Math.max(1, Math.floor(Number.isFinite(opts.page) ? opts.page! : 1)));
   const orderBy: Prisma.ProductOrderByWithRelationInput =
     opts.sort === "price-asc" ? { basePrice: "asc" } : opts.sort === "price-desc" ? { basePrice: "desc" } : { createdAt: "desc" };
 

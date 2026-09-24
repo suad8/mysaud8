@@ -3,6 +3,8 @@ import { calculateTotals } from "@/server/cart/pricing";
 import { getCartLines } from "@/server/cart/queries";
 import { getCartSessionId } from "@/server/cart/session";
 import { validateCoupon, couponToDiscountInput } from "@/server/discounts/validate";
+import { getActiveShippingZones } from "@/server/shipping/queries";
+import { matchZoneForCity } from "@/server/shipping/match";
 import { PaymentMethod, PaymentStatus, OrderStatus, Prisma } from "@prisma/client";
 
 /** يُرمى عند نفاد مخزون سطر بالسلة عند إنشاء الطلب — رسالة مخصّصة تُعرض للعميل بدل خطأ عام. */
@@ -10,6 +12,9 @@ export class StockError extends Error {}
 
 /** يُرمى عند اختيار سعر شحن غير موجود أو مُعطَّل — لا يُعتمَد أبداً على سعر يرسله المتصفح مباشرة. */
 export class ShippingError extends Error {}
+
+/** يُرمى إن استُنفد حد استخدام الكوبون لحظة إنشاء الطلب (طلبات متزامنة). */
+export class CouponError extends Error {}
 
 export async function getCheckoutLines() {
   return getCartLines();
@@ -65,10 +70,12 @@ export async function createOrderFromCheckout(input: CreateOrderInput) {
     }
   }
 
-  // سعر الشحن يُعاد جلبه من القاعدة دائماً بمعرّفه — لا يُوثَق بسعر قد يُرسَل من المتصفح مباشرة
-  const rate = await db.shippingRate.findUnique({ where: { id: input.shippingRateId }, select: { isActive: true, price: true, freeAbove: true, zone: { select: { isActive: true } } } });
-  if (!rate || !rate.isActive || !rate.zone.isActive) {
-    throw new ShippingError("طريقة الشحن المختارة لم تعد متاحة، يرجى اختيار طريقة أخرى.");
+  // سعر الشحن يُعاد جلبه من القاعدة دائماً، ويجب أن يكون من منطقة الشحن التي تخدم
+  // مدينة العميل — وإلا يستطيع أي شخص إرسال معرّف سعر أرخص من منطقة أخرى
+  const zone = matchZoneForCity(await getActiveShippingZones(), input.contact.city);
+  const rate = zone?.rates.find((r) => r.id === input.shippingRateId);
+  if (!rate) {
+    throw new ShippingError("طريقة الشحن المختارة لا تخدم مدينتك أو لم تعد متاحة، يرجى اختيار طريقة أخرى.");
   }
 
   const subtotal = lines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
@@ -82,8 +89,8 @@ export async function createOrderFromCheckout(input: CreateOrderInput) {
   const totals = calculateTotals({
     lines,
     discount: validCoupon ? couponToDiscountInput(validCoupon) : null,
-    shippingRate: Number(rate.price),
-    freeShippingAbove: rate.freeAbove == null ? null : Number(rate.freeAbove),
+    shippingRate: rate.price,
+    freeShippingAbove: rate.freeAbove,
   });
 
   const { contact } = input;
@@ -157,19 +164,32 @@ export async function createOrderFromCheckout(input: CreateOrderInput) {
         // خصم المخزون فعلياً عند إنشاء الطلب (وليس عند تأكيد الدفع) — يمنع
         // بيع نفس القطعة لأكثر من عميل بين إنشاء الطلب ومراجعته من الفريق.
         // يُعاد المخزون تلقائياً إن رُفض إيصال التحويل لاحقاً (انظر orders/actions.ts).
+        // خصم مشروط داخل المعاملة: لا يُخصم إلا إن بقيت الكمية متوفرة لحظة الكتابة —
+        // طلبان متزامنان على آخر قطعة لا يمكن أن ينجحا معاً (يُلغى الثاني بالكامل)
         for (const line of lines) {
-          const inventory = await tx.inventoryItem.update({
-            where: { variantId: line.variantId },
+          const updated = await tx.inventoryItem.updateMany({
+            where: { variantId: line.variantId, onHand: { gte: line.quantity } },
             data: { onHand: { decrement: line.quantity } },
-            select: { id: true },
           });
+          if (updated.count === 0) {
+            throw new StockError(`الكمية المطلوبة من "${line.nameAr}" نفدت للتو — عدّل الكمية وحاول مجدداً`);
+          }
+          const inventory = await tx.inventoryItem.findUniqueOrThrow({ where: { variantId: line.variantId }, select: { id: true } });
           await tx.inventoryMovement.create({
             data: { inventoryId: inventory.id, delta: -line.quantity, reason: "طلب جديد", reference: order.number },
           });
         }
 
         if (validCoupon) {
-          await tx.coupon.update({ where: { id: validCoupon.id }, data: { usageCount: { increment: 1 } } });
+          // زيادة مشروطة بحد الاستخدام — يمنع تجاوز الحد بطلبات متزامنة
+          const used = await tx.coupon.updateMany({
+            where: {
+              id: validCoupon.id,
+              ...(validCoupon.usageLimit != null ? { usageCount: { lt: validCoupon.usageLimit } } : {}),
+            },
+            data: { usageCount: { increment: 1 } },
+          });
+          if (used.count === 0) throw new CouponError("انتهى حد استخدام كود الخصم للتو — أزِله من السلة وأكمل الطلب");
         }
 
         // إفراغ السلة وتحويلها بعد نجاح الطلب — تبدأ سلة جديدة فارغة للزيارة القادمة

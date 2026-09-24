@@ -3,15 +3,18 @@ import { ProductCard } from "@/components/storefront/ProductCard";
 import { searchProducts } from "@/server/catalog/queries";
 import { formatNumber } from "@/lib/format";
 
-type Props = { searchParams: Promise<{ q?: string }> };
+type Props = { searchParams: Promise<{ q?: string | string[] }> };
+
+/** ‎?q=a&q=b يصل كمصفوفة — نأخذ الأول ونقصّه لطول معقول بدل صفحة خطأ */
+const readQuery = (q: string | string[] | undefined) => (Array.isArray(q) ? q[0] ?? "" : q ?? "").trim().slice(0, 100);
 
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
-  const { q = "" } = await searchParams;
+  const q = readQuery((await searchParams).q);
   return { title: q ? `نتائج البحث عن "${q}"` : "البحث" };
 }
 
 export default async function SearchPage({ searchParams }: Props) {
-  const { q = "" } = await searchParams;
+  const q = readQuery((await searchParams).q);
   const products = q ? await searchProducts(q) : [];
 
   return (

@@ -4,11 +4,16 @@ import { Button } from "@/components/ui/Button";
 import { Price } from "@/components/ui/Price";
 import { db } from "@/server/db";
 import { PAYMENT_METHOD_LABEL } from "@/lib/constants";
+import { verifyOrderAccessToken } from "@/server/orders/access";
 
-type Props = { params: Promise<{ number: string }> };
+export const metadata = { robots: { index: false, follow: false } };
 
-export default async function OrderConfirmationPage({ params }: Props) {
-  const { number } = await params;
+type Props = { params: Promise<{ number: string }>; searchParams: Promise<{ t?: string | string[] }> };
+
+export default async function OrderConfirmationPage({ params, searchParams }: Props) {
+  const [{ number }, { t }] = await Promise.all([params, searchParams]);
+  // بلا الرمز السري الصحيح تُعامَل الصفحة كغير موجودة — لا يُكشف حتى وجود الطلب
+  if (!verifyOrderAccessToken(number, t)) notFound();
   const order = await db.order.findUnique({
     where: { number },
     include: { items: true, payments: { orderBy: { createdAt: "desc" }, take: 1 } },

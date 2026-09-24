@@ -43,7 +43,12 @@ function hmac(value: string): string {
   return createHmac("sha256", getSecret()).update(value).digest("base64url");
 }
 
-function safeEqual(a: string, b: string): boolean {
+/** توقيع قيمة بمفتاح الخادم لأغراض أخرى (مثل روابط الطلبات) — الغرض جزء من القيمة الموقَّعة. */
+export function signServerValue(purpose: string, value: string): string {
+  return hmac(`${purpose}:${value}`);
+}
+
+export function safeEqual(a: string, b: string): boolean {
   const x = Buffer.from(a);
   const y = Buffer.from(b);
   return x.length === y.length && timingSafeEqual(x, y);
