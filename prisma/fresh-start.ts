@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { applyBrand, writeSetting } from "./brand";
 import { assertDestructiveAllowed } from "./guard";
+import { DEMO_CATEGORY_SLUGS, DEMO_COUPON_CODES, DEMO_IBAN } from "../src/server/demo/demo-data";
 
 const db = new PrismaClient();
 
@@ -12,9 +13,6 @@ const db = new PrismaClient();
  * ⚠️ لا رجعة فيه — يُشغَّل مرة واحدة قبل رفع منتجاتك الحقيقية.
  * يبقى كما هو: حساب المدير، مناطق الشحن، إعدادات بوابة الدفع، الثيم، والصفحات.
  */
-const DEMO_CATEGORY_SLUGS = ["coffee-beans", "matcha", "brewing", "ready-to-drink", "gifts"];
-const DEMO_COUPON_CODES = ["WELCOME10", "FREESHIP", "SAVE30"];
-const DEMO_IBAN = "SA44 2000 0001 2345 6789 1234";
 
 async function main() {
   assertDestructiveAllowed("db:fresh-start");

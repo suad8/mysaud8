@@ -1,9 +1,11 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { startTransition, useActionState, useEffect, useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import { updateThemeAction, type ThemeFormState } from "@/server/theme/actions";
+import { FooterEditor, type LinkOptionGroup } from "@/components/admin/FooterEditor";
+import { FeaturedPicker, type FeaturedCandidate } from "@/components/admin/FeaturedPicker";
 import type { HomepageSectionsSettings } from "@/server/settings";
 import {
   COLOR_PRESETS,
@@ -13,7 +15,7 @@ import {
   type TrustItem,
 } from "@/lib/theme";
 
-type ProductOption = { id: string; slug: string; nameAr: string; isFeatured: boolean };
+type ProductOption = FeaturedCandidate & { slug: string };
 type LogoRow = { key: string; name: string; logoUrl: string };
 
 let rowSeq = 0;
@@ -62,10 +64,12 @@ export function ThemeForm({
   theme,
   visibility,
   products,
+  linkOptions,
 }: {
   theme: ThemeSettings;
   visibility: HomepageSectionsSettings;
   products: ProductOption[];
+  linkOptions: LinkOptionGroup[];
 }) {
   const [state, formAction, isPending] = useActionState<ThemeFormState, FormData>(updateThemeAction, {});
   const [primary, setPrimary] = useState(theme.primaryColor);
@@ -105,13 +109,14 @@ export function ThemeForm({
         );
       case "featured":
         return (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <TextField name="featuredTitle" label="العنوان" defaultValue={theme.featuredTitle} />
-            <TextField name="featuredSubtitle" label="الوصف" defaultValue={theme.featuredSubtitle} />
-            <TextField name="featuredLinkText" label="نص رابط عرض الكل" defaultValue={theme.featuredLinkText} />
-            <TextField name="featuredLinkHref" label="رابط عرض الكل" defaultValue={theme.featuredLinkHref} dir="ltr" />
-            <TextField name="featuredCount" label="عدد المنتجات المعروضة" type="number" defaultValue={theme.featuredCount} />
-            <p className="self-end text-xs text-muted">اختر المنتجات البارزة من قسم "المنتجات البارزة" بالأسفل.</p>
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <TextField name="featuredTitle" label="العنوان" defaultValue={theme.featuredTitle} />
+              <TextField name="featuredSubtitle" label="الوصف" defaultValue={theme.featuredSubtitle} />
+              <TextField name="featuredLinkText" label="نص رابط عرض الكل" defaultValue={theme.featuredLinkText} />
+              <TextField name="featuredLinkHref" label="رابط عرض الكل" defaultValue={theme.featuredLinkHref} dir="ltr" />
+            </div>
+            <FeaturedPicker products={products} initialOrder={theme.featuredOrder} initialCount={theme.featuredCount} />
           </div>
         );
       case "bundle":
@@ -157,7 +162,16 @@ export function ThemeForm({
   }
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form
+      action={formAction}
+      // إرسال يدوي: الإرسال التلقائي في React 19 يفرّغ حقول النموذج حتى عند فشل الحفظ
+      onSubmit={(e) => {
+        e.preventDefault();
+        const formData = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter);
+        startTransition(() => formAction(formData));
+      }}
+      className="space-y-5"
+    >
       {/* الألوان */}
       <Card title="الألوان" desc="لون المتجر الأساسي (الأزرار والروابط) واللون المميّز (الأزرار الثانوية والشارات)." open>
         <div className="flex flex-wrap gap-2">
@@ -229,30 +243,13 @@ export function ThemeForm({
         </div>
       </Card>
 
-      {/* المنتجات البارزة */}
-      <Card title="المنتجات البارزة" desc="المنتجات المحدّدة تظهر في قسم المنتجات البارزة بالصفحة الرئيسية.">
-        {products.length === 0 ? (
-          <p className="text-sm text-muted">لا توجد منتجات منشورة بعد.</p>
-        ) : (
-          <div className="grid max-h-80 gap-2 overflow-y-auto sm:grid-cols-2">
-            {products.map((p) => (
-              <label key={p.id} className="flex items-center gap-2.5 rounded-lg border px-3 py-2 text-sm">
-                <input type="hidden" name="featuredCandidateId" value={p.id} />
-                <input type="checkbox" name="featuredProductId" value={p.id} defaultChecked={p.isFeatured} className="h-4 w-4 accent-brand-600" />
-                <span className="truncate">{p.nameAr}</span>
-              </label>
-            ))}
-          </div>
-        )}
-      </Card>
-
       {/* صفحة المنتج */}
       <Card title="صفحة المنتج" desc="المزايا الصغيرة التي تظهر تحت زر الإضافة للسلة (اترك العنوان فارغاً لإخفاء الميزة).">
         <PairFields items={theme.productTrust} titleName="productTrustTitle" descName="productTrustDesc" titleLabel="الميزة" />
       </Card>
 
       {/* الفوتر */}
-      <Card title="الفوتر (أسفل الصفحة)" desc="النشرة البريدية، النبذة، شعارات الدفع، الروابط، والسجل التجاري.">
+      <Card title="الفوتر (أسفل الصفحة)" desc="النشرة البريدية، النبذة، حسابات التواصل، شعارات الدفع، الأعمدة والروابط، والسجل التجاري.">
         <div className="space-y-3 rounded-xl border p-4">
           <label className="flex items-center gap-2.5 text-sm font-semibold">
             <input type="checkbox" name="newsletterEnabled" defaultChecked={theme.newsletterEnabled} className="h-4 w-4 accent-brand-600" />
@@ -303,25 +300,12 @@ export function ThemeForm({
           </button>
         </div>
 
-        <div className="rounded-xl border p-4">
-          <p className="text-sm font-semibold">أعمدة الروابط</p>
-          <p className="mt-0.5 text-xs text-muted">
-            سطر لكل رابط بصيغة: <span dir="ltr" className="num">النص | /الرابط</span> — مثال: <span dir="ltr" className="num">سياسة الإرجاع | /pages/returns</span>
-          </p>
-          <div className="mt-3 grid gap-3 lg:grid-cols-3">
-            {theme.footerColumns.map((col, i) => (
-              <div key={i} className="space-y-2">
-                <TextField name="footerColTitle" label={`عنوان العمود ${i + 1}`} defaultValue={col.title} />
-                <textarea
-                  name="footerColLinks"
-                  rows={5}
-                  defaultValue={col.links.map((l) => `${l.label} | ${l.href}`).join("\n")}
-                  className="w-full rounded-lg border bg-transparent px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-brand-500/40"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
+        <FooterEditor
+          initialColumns={theme.footerColumns}
+          initialSocial={theme.socialLinks}
+          savedSocial={state.success ? state.socialLinks : undefined}
+          linkOptions={linkOptions}
+        />
 
         <div className="grid gap-3 sm:grid-cols-3">
           <TextField name="commercialRegistration" label="رقم السجل التجاري (فارغ = إخفاء)" defaultValue={theme.commercialRegistration} dir="ltr" />

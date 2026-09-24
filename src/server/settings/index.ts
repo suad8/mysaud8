@@ -1,5 +1,5 @@
 import { db } from "@/server/db";
-import { THEME_DEFAULTS, normalizeSectionOrder, type ThemeSettings } from "@/lib/theme";
+import { THEME_DEFAULTS, normalizeFooter, normalizeSectionOrder, type ThemeSettings } from "@/lib/theme";
 
 /**
  * طبقة الإعدادات — تخزين مفتاح/قيمة في جدول Setting (JSON) بدل ترحيل
@@ -196,7 +196,12 @@ const HOMEPAGE_SECTIONS_DEFAULTS: HomepageSectionsSettings = {
 
 export async function getThemeSettings(): Promise<ThemeSettings> {
   const theme = await getSetting<ThemeSettings>("theme.storefront", THEME_DEFAULTS);
-  return { ...theme, sectionOrder: normalizeSectionOrder(theme.sectionOrder) };
+  return {
+    ...theme,
+    sectionOrder: normalizeSectionOrder(theme.sectionOrder),
+    featuredOrder: Array.isArray(theme.featuredOrder) ? theme.featuredOrder.filter((id) => typeof id === "string") : [],
+    ...normalizeFooter(theme),
+  };
 }
 
 export function saveThemeSettings(value: ThemeSettings) {

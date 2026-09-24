@@ -46,7 +46,7 @@ export default async function HomePage() {
   ]);
 
   const [featured, arrivals, categories, testimonials, productCount, chosenBundle, chosenFloating] = await Promise.all([
-    getFeaturedProducts(theme.featuredCount),
+    getFeaturedProducts(theme.featuredCount, theme.featuredOrder),
     getNewArrivals(theme.arrivalsCount),
     getCategories(),
     getTestimonials(3),

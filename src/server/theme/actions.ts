@@ -12,14 +12,17 @@ import {
   HEX_COLOR_PATTERN,
   HOMEPAGE_SECTION_KEYS,
   normalizeSectionOrder,
+  normalizeSocialUrl,
   safeHref,
+  SOCIAL_PLATFORMS,
   type FooterColumn,
+  type SocialLink,
   type PaymentLogo,
   type ThemeSettings,
   type TrustItem,
 } from "@/lib/theme";
 
-export type ThemeFormState = { error?: string; success?: boolean; paymentLogos?: PaymentLogo[] };
+export type ThemeFormState = { error?: string; success?: boolean; paymentLogos?: PaymentLogo[]; socialLinks?: SocialLink[] };
 
 const text = (formData: FormData, key: string, max = 300) => String(formData.get(key) ?? "").trim().slice(0, max);
 
@@ -34,18 +37,44 @@ function readPairs(formData: FormData, titleKey: string, descKey: string): Trust
   return titles.map((title, i) => ({ title, desc: descs[i] ?? "" }));
 }
 
-/** سطر لكل رابط بصيغة "النص | الرابط" — أي رابط غير آمن يُستبدل بالصفحة الرئيسية. */
-function parseLinkLines(raw: string) {
-  return raw
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
+function parseJson(raw: FormDataEntryValue | null): unknown {
+  try {
+    return JSON.parse(String(raw ?? ""));
+  } catch {
+    return null;
+  }
+}
+
+const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+
+/** أعمدة الفوتر تصل كـ JSON من محرّر الأعمدة — تُقيَّد الأطوال والأعداد، وأي رابط غير آمن يُستبعد. */
+function parseFooterColumns(raw: FormDataEntryValue | null): FooterColumn[] {
+  const data = parseJson(raw);
+  if (!Array.isArray(data)) return [];
+  return data.slice(0, 6).map((col) => {
+    const c = (col ?? {}) as Record<string, unknown>;
+    const links = (Array.isArray(c.links) ? c.links : [])
+      .slice(0, 15)
+      .map((l) => {
+        const link = (l ?? {}) as Record<string, unknown>;
+        return { label: str(link.label, 60), href: safeHref(str(link.href, 300), "") };
+      })
+      .filter((l) => l.label && l.href);
+    return { title: str(c.title, 40), text: str(c.text, 600), links };
+  });
+}
+
+function parseSocialLinks(raw: FormDataEntryValue | null): SocialLink[] {
+  const data = parseJson(raw);
+  if (!Array.isArray(data)) return [];
+  return data
     .slice(0, 12)
-    .map((line) => {
-      const [label, href = "/"] = line.split("|").map((s) => s.trim());
-      return { label: label.slice(0, 60), href: safeHref(href) };
+    .map((l) => {
+      const link = (l ?? {}) as Record<string, unknown>;
+      const platform = SOCIAL_PLATFORMS.find((p) => p === link.platform);
+      return platform ? { platform, url: normalizeSocialUrl(platform, str(link.url, 300)) } : null;
     })
-    .filter((l) => l.label);
+    .filter((l): l is SocialLink => Boolean(l?.url));
 }
 
 export async function updateThemeAction(_prev: ThemeFormState, formData: FormData): Promise<ThemeFormState> {
@@ -74,9 +103,8 @@ export async function updateThemeAction(_prev: ThemeFormState, formData: FormDat
     paymentLogos.push({ name: names[i], logoUrl });
   }
 
-  const colTitles = formData.getAll("footerColTitle").map((v) => String(v).trim().slice(0, 40));
-  const colLinks = formData.getAll("footerColLinks").map((v) => String(v));
-  const footerColumns: FooterColumn[] = colTitles.map((title, i) => ({ title, links: parseLinkLines(colLinks[i] ?? "") }));
+  const footerColumns = parseFooterColumns(formData.get("footerColumnsJson"));
+  const socialLinks = parseSocialLinks(formData.get("socialLinksJson"));
 
   const theme: ThemeSettings = {
     primaryColor: HEX_COLOR_PATTERN.test(primaryColor) ? primaryColor.toLowerCase() : DEFAULT_PRIMARY_COLOR,
@@ -94,6 +122,7 @@ export async function updateThemeAction(_prev: ThemeFormState, formData: FormDat
     featuredLinkText: text(formData, "featuredLinkText", 40),
     featuredLinkHref: safeHref(text(formData, "featuredLinkHref", 300), "/products"),
     featuredCount: clampInt(formData.get("featuredCount"), 1, 24, 8),
+    featuredOrder: [],
 
     bundleProductSlug: text(formData, "bundleProductSlug", 200),
     bundleBadge: text(formData, "bundleBadge", 60),
@@ -118,6 +147,7 @@ export async function updateThemeAction(_prev: ThemeFormState, formData: FormDat
 
     footerAbout: text(formData, "footerAbout", 400),
     paymentLogos,
+    socialLinks,
     footerColumns,
     commercialRegistration: text(formData, "commercialRegistration", 30),
     vatNumber: text(formData, "vatNumber", 30),
@@ -131,7 +161,10 @@ export async function updateThemeAction(_prev: ThemeFormState, formData: FormDat
   // المنتجات البارزة: تُحدَّث فقط المنتجات المعروضة بالقائمة (المنشورة)؛
   // المسودات والمؤرشفة لا تُلمس حتى لا يضيع تمييزها دون قصد.
   const candidateIds = formData.getAll("featuredCandidateId").map(String).filter(Boolean);
-  const featuredIds = new Set(formData.getAll("featuredProductId").map(String));
+  // ترتيب الحقول = ترتيب الظهور الذي اختاره المدير
+  const featuredList = [...new Set(formData.getAll("featuredProductId").map(String))].filter((id) => candidateIds.includes(id));
+  const featuredIds = new Set(featuredList);
+  theme.featuredOrder = featuredList;
 
   await saveThemeSettings(theme);
   await saveHomepageSections(visibility);
@@ -145,5 +178,5 @@ export async function updateThemeAction(_prev: ThemeFormState, formData: FormDat
   await logAudit({ actorId: session.sub, action: "theme.updated", entity: "Setting", entityId: "theme.storefront" });
 
   revalidatePath("/", "layout");
-  return { success: true, paymentLogos };
+  return { success: true, paymentLogos, socialLinks };
 }

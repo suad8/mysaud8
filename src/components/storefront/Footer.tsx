@@ -2,22 +2,41 @@ import Image from "next/image";
 import Link from "next/link";
 import { StoreLogo } from "@/components/StoreLogo";
 import { NewsletterForm } from "@/components/storefront/NewsletterForm";
+import { SOCIAL_ICON_PATHS } from "@/components/storefront/social-icons";
 import { getStoreInfoSettings, getThemeSettings } from "@/server/settings";
+import { db } from "@/server/db";
+import { decodeSlug } from "@/lib/route-params";
+import { SOCIAL_PLATFORM_LABEL } from "@/lib/theme";
 
 function FooterLink({ href, label }: { href: string; label: string }) {
   const cls = "text-sm text-muted transition-colors hover:text-[var(--text-strong)]";
-  return href.startsWith("/") ? (
-    <Link href={href} className={cls}>{label}</Link>
-  ) : (
-    <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>{label}</a>
-  );
+  if (href.startsWith("/")) return <Link href={href} className={cls}>{label}</Link>;
+  // بريد/هاتف يفتح تطبيقه مباشرة؛ الروابط الخارجية في تبويب جديد
+  if (/^(mailto|tel):/i.test(href)) return <a href={href} className={cls}>{label}</a>;
+  return <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>{label}</a>;
+}
+
+/** روابط صفحات المعلومات غير المنشورة تُخفى — لا يرى العميل صفحة فارغة أو 404. */
+async function getPublishedPageSlugs(): Promise<Set<string> | null> {
+  try {
+    const pages = await db.page.findMany({ where: { isPublished: true }, select: { slug: true } });
+    return new Set(pages.map((p) => p.slug));
+  } catch {
+    return null; // جدول الصفحات غير متاح بعد — تُعرض الروابط كما هي بدل تعطيل الفوتر
+  }
 }
 
 export async function Footer() {
-  const [storeInfo, theme] = await Promise.all([getStoreInfoSettings(), getThemeSettings()]);
+  const [storeInfo, theme, publishedPages] = await Promise.all([getStoreInfoSettings(), getThemeSettings(), getPublishedPageSlugs()]);
 
   const about = theme.footerAbout || storeInfo.tagline;
-  const columns = theme.footerColumns.filter((c) => c.title || c.links.length > 0);
+  const isVisibleLink = (href: string) => {
+    const match = /^\/pages\/([^/?#]+)/.exec(href);
+    return !match || !publishedPages || publishedPages.has(decodeSlug(match[1]!));
+  };
+  const columns = theme.footerColumns
+    .map((c) => ({ ...c, links: c.links.filter((l) => isVisibleLink(l.href)) }))
+    .filter((c) => c.text || c.links.length > 0);
   const legal = [
     theme.footerNote,
     theme.commercialRegistration && `س.ت ${theme.commercialRegistration}`,
@@ -46,6 +65,26 @@ export async function Footer() {
               <span className="text-lg font-bold">{storeInfo.name}</span>
             </div>
             {about && <p className="mt-4 max-w-sm text-sm leading-relaxed text-muted">{about}</p>}
+            {theme.socialLinks.length > 0 && (
+              <ul className="mt-5 flex flex-wrap items-center gap-2" aria-label="حسابات التواصل">
+                {theme.socialLinks.map((s) => (
+                  <li key={`${s.platform}-${s.url}`}>
+                    <a
+                      href={s.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={SOCIAL_PLATFORM_LABEL[s.platform]}
+                      title={SOCIAL_PLATFORM_LABEL[s.platform]}
+                      className="grid h-10 w-10 place-items-center rounded-full border text-muted transition-colors hover:border-brand-400 hover:text-brand-600"
+                    >
+                      <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="currentColor" aria-hidden>
+                        <path d={SOCIAL_ICON_PATHS[s.platform]} />
+                      </svg>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
             {theme.paymentLogos.length > 0 && (
               <div className="mt-6 flex flex-wrap items-center gap-2">
                 {theme.paymentLogos.map((m) =>
@@ -65,14 +104,17 @@ export async function Footer() {
 
           {columns.map((col, i) => (
             <div key={`${col.title}-${i}`}>
-              {col.title && <h3 className="text-sm font-semibold">{col.title}</h3>}
-              <ul className="mt-4 space-y-2.5">
-                {col.links.map((link) => (
-                  <li key={`${link.label}-${link.href}`}>
-                    <FooterLink href={link.href} label={link.label} />
-                  </li>
-                ))}
-              </ul>
+              {col.title && <h3 className="mb-4 text-sm font-semibold">{col.title}</h3>}
+              {col.text && <p className="whitespace-pre-line text-sm leading-relaxed text-muted">{col.text}</p>}
+              {col.links.length > 0 && (
+                <ul className={`space-y-2.5 ${col.text ? "mt-4" : ""}`}>
+                  {col.links.map((link) => (
+                    <li key={`${link.label}-${link.href}`}>
+                      <FooterLink href={link.href} label={link.label} />
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           ))}
         </div>

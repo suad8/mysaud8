@@ -31,7 +31,54 @@ export const HOMEPAGE_SECTION_LABEL: Record<HomepageSectionKey, string> = {
 
 export type TrustItem = { title: string; desc: string };
 export type LinkItem = { label: string; href: string };
-export type FooterColumn = { title: string; links: LinkItem[] };
+/** عمود بالفوتر: عنوان + نص حر اختياري (ساعات العمل، العنوان، ملخص سياسة...) + روابط */
+export type FooterColumn = { title: string; text: string; links: LinkItem[] };
+
+export const SOCIAL_PLATFORMS = ["whatsapp", "instagram", "x", "tiktok", "snapchat", "youtube", "facebook", "telegram", "threads"] as const;
+export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
+export type SocialLink = { platform: SocialPlatform; url: string };
+
+export const SOCIAL_PLATFORM_LABEL: Record<SocialPlatform, string> = {
+  whatsapp: "واتساب",
+  instagram: "انستقرام",
+  x: "إكس (تويتر)",
+  tiktok: "تيك توك",
+  snapchat: "سناب شات",
+  youtube: "يوتيوب",
+  facebook: "فيسبوك",
+  telegram: "تيليجرام",
+  threads: "ثريدز",
+};
+
+/** رابط الحساب من اسم المستخدم (بدون @) — لمن يكتب اسم الحساب بدل الرابط الكامل */
+const SOCIAL_PROFILE_URL: Record<Exclude<SocialPlatform, "whatsapp">, (handle: string) => string> = {
+  instagram: (h) => `https://instagram.com/${h}`,
+  x: (h) => `https://x.com/${h}`,
+  tiktok: (h) => `https://www.tiktok.com/@${h}`,
+  snapchat: (h) => `https://www.snapchat.com/add/${h}`,
+  youtube: (h) => `https://www.youtube.com/@${h}`,
+  facebook: (h) => `https://www.facebook.com/${h}`,
+  telegram: (h) => `https://t.me/${h}`,
+  threads: (h) => `https://www.threads.net/@${h}`,
+};
+
+/**
+ * يحوّل ما يكتبه المدير إلى رابط آمن: رابط https كامل، أو اسم حساب (@name)،
+ * أو رقم جوال لواتساب (05xxxxxxxx أو 9665xxxxxxxx). يعيد "" إن كان غير صالح.
+ */
+export function normalizeSocialUrl(platform: SocialPlatform, raw: string): string {
+  const value = raw.trim();
+  if (!value) return "";
+  if (/^https:\/\/[^\s"'<>]+$/i.test(value)) return value;
+  if (platform === "whatsapp") {
+    let digits = value.replace(/[\s\-()+]/g, "");
+    if (!/^\d{9,15}$/.test(digits)) return "";
+    if (digits.startsWith("05")) digits = `966${digits.slice(1)}`;
+    return `https://wa.me/${digits}`;
+  }
+  const handle = value.replace(/^@/, "");
+  return /^[\w.\-]{1,60}$/.test(handle) ? SOCIAL_PROFILE_URL[platform](handle) : "";
+}
 export type PaymentLogo = { name: string; logoUrl: string };
 
 export type ThemeSettings = {
@@ -51,6 +98,8 @@ export type ThemeSettings = {
   featuredLinkText: string;
   featuredLinkHref: string;
   featuredCount: number;
+  /** ترتيب المنتجات البارزة (معرّفات) — ما لم يُرتَّب يظهر بعدها حسب الأحدث */
+  featuredOrder: string[];
 
   /** "" = تلقائي (أحدث منتج عليه خصم) */
   bundleProductSlug: string;
@@ -77,6 +126,8 @@ export type ThemeSettings = {
 
   footerAbout: string;
   paymentLogos: PaymentLogo[];
+  /** أيقونات حسابات التواصل تحت نبذة المتجر */
+  socialLinks: SocialLink[];
   footerColumns: FooterColumn[];
   /** رقم السجل التجاري — فارغ = إخفاء */
   commercialRegistration: string;
@@ -110,6 +161,7 @@ export const THEME_DEFAULTS: ThemeSettings = {
   featuredLinkText: "عرض الكل ←",
   featuredLinkHref: "/products",
   featuredCount: 8,
+  featuredOrder: [],
 
   bundleProductSlug: "",
   bundleBadge: "عرض خاص",
@@ -145,10 +197,12 @@ export const THEME_DEFAULTS: ThemeSettings = {
     { name: "تابي", logoUrl: "" },
     { name: "تمارا", logoUrl: "" },
   ],
+  socialLinks: [],
   footerColumns: [
-    { title: "المتجر", links: [{ label: "كل المنتجات", href: "/products" }] },
+    { title: "المتجر", text: "", links: [{ label: "كل المنتجات", href: "/products" }] },
     {
       title: "المساعدة",
+      text: "",
       links: [
         { label: "الشحن والتوصيل", href: "/pages/shipping" },
         { label: "الاستبدال والإرجاع", href: "/pages/returns" },
@@ -157,6 +211,7 @@ export const THEME_DEFAULTS: ThemeSettings = {
     },
     {
       title: "عن المتجر",
+      text: "",
       links: [
         { label: "من نحن", href: "/pages/about" },
         { label: "سياسة الخصوصية", href: "/pages/privacy" },
@@ -189,7 +244,24 @@ export function safeHref(href: string, fallback = "/"): string {
   const value = href.trim();
   if (value.startsWith("/") && !value.startsWith("//")) return value;
   if (/^https?:\/\/[^\s]+$/i.test(value)) return value;
+  // بريد وهاتف (مثلاً في روابط الفوتر) — بلا مسافات أو علامات تنصيص
+  if (/^mailto:[^\s"'<>]+@[^\s"'<>]+$/i.test(value)) return value;
+  if (/^tel:\+?[\d\-]{6,20}$/i.test(value)) return value;
   return fallback;
+}
+
+/** يطبّع أعمدة/حسابات الفوتر المحفوظة (بيانات أقدم قد لا تحتوي الحقول الجديدة). */
+export function normalizeFooter(theme: Pick<ThemeSettings, "footerColumns" | "socialLinks">) {
+  const columns = Array.isArray(theme.footerColumns) ? theme.footerColumns : [];
+  const social = Array.isArray(theme.socialLinks) ? theme.socialLinks : [];
+  return {
+    footerColumns: columns.map((c) => ({
+      title: typeof c?.title === "string" ? c.title : "",
+      text: typeof c?.text === "string" ? c.text : "",
+      links: Array.isArray(c?.links) ? c.links.filter((l) => typeof l?.label === "string" && typeof l?.href === "string") : [],
+    })),
+    socialLinks: social.filter((l) => SOCIAL_PLATFORMS.includes(l?.platform) && typeof l?.url === "string" && l.url.startsWith("https://")),
+  };
 }
 
 /** يرتّب الأقسام حسب إعداد المدير، ويضيف أي قسم ناقص في النهاية. */

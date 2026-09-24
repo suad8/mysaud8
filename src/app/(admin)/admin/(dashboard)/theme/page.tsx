@@ -1,6 +1,7 @@
 import { Topbar } from "@/components/admin/Topbar";
 import { HeroBannerForm } from "@/components/admin/HeroBannerForm";
 import { ThemeForm } from "@/components/admin/ThemeForm";
+import type { LinkOptionGroup } from "@/components/admin/FooterEditor";
 import { db } from "@/server/db";
 import { getHeroContent, getHomepageSections, getThemeSettings } from "@/server/settings";
 import { deleteSubscriberAction } from "@/server/newsletter/actions";
@@ -9,17 +10,41 @@ import { requireAdminPage } from "@/server/auth/session";
 
 export default async function AdminThemePage() {
   await requireAdminPage();
-  const [hero, theme, visibility, products, subscribers] = await Promise.all([
+  const [hero, theme, visibility, products, subscribers, pages, categories] = await Promise.all([
     getHeroContent(),
     getThemeSettings(),
     getHomepageSections(),
-    db.product.findMany({
-      where: { status: "ACTIVE", deletedAt: null },
-      select: { id: true, slug: true, nameAr: true, isFeatured: true },
-      orderBy: { nameAr: "asc" },
-    }),
+    db.product
+      .findMany({
+        where: { status: "ACTIVE", deletedAt: null },
+        select: { id: true, slug: true, nameAr: true, isFeatured: true, basePrice: true, images: { select: { url: true }, orderBy: { position: "asc" }, take: 1 } },
+        orderBy: { nameAr: "asc" },
+      })
+      .then((rows) =>
+        rows.map(({ images, basePrice, ...p }) => ({ ...p, imageUrl: images[0]?.url ?? null, price: Number(basePrice) })),
+      ),
     db.newsletterSubscriber.findMany({ orderBy: { createdAt: "desc" } }),
+    db.page.findMany({ select: { slug: true, title: true, isPublished: true }, orderBy: { title: "asc" } }),
+    db.category.findMany({ where: { isActive: true }, select: { slug: true, nameAr: true }, orderBy: { position: "asc" } }),
   ]);
+
+  // وجهات جاهزة لروابط الفوتر — صفحات المتجر الأساسية + صفحاتك + التصنيفات
+  const linkOptions: LinkOptionGroup[] = [
+    {
+      group: "صفحات المتجر",
+      options: [
+        { label: "الرئيسية", href: "/" },
+        { label: "كل المنتجات", href: "/products" },
+        { label: "البحث", href: "/search" },
+        { label: "السلة", href: "/cart" },
+      ],
+    },
+    {
+      group: "صفحاتك (من «الصفحات»)",
+      options: pages.map((p) => ({ label: p.title, href: `/pages/${p.slug}`, note: p.isPublished ? undefined : "غير منشورة" })),
+    },
+    { group: "التصنيفات", options: categories.map((c) => ({ label: c.nameAr, href: `/c/${c.slug}` })) },
+  ].filter((g) => g.options.length > 0);
 
   return (
     <>
@@ -38,7 +63,7 @@ export default async function AdminThemePage() {
           </div>
         </details>
 
-        <ThemeForm theme={theme} visibility={visibility} products={products} />
+        <ThemeForm theme={theme} visibility={visibility} products={products} linkOptions={linkOptions} />
 
         <section className="surface-card p-5">
           <h2 className="text-sm font-semibold">مشتركو النشرة البريدية ({formatNumber(subscribers.length)})</h2>

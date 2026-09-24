@@ -5,6 +5,8 @@ import { StoreInfoForm } from "@/components/admin/StoreInfoForm";
 import { ChangePasswordForm } from "@/components/admin/ChangePasswordForm";
 import { AdminUsersManager } from "@/components/admin/AdminUsersManager";
 import { SeoMarketingForm } from "@/components/admin/SeoMarketingForm";
+import { RemoveDemoDataForm } from "@/components/admin/RemoveDemoDataForm";
+import { getDemoDataSummary } from "@/server/demo/cleanup";
 import { db } from "@/server/db";
 import { getSession } from "@/server/auth/session";
 import { AdminRole } from "@prisma/client";
@@ -65,6 +67,17 @@ export default async function AdminSettingsPage() {
   if (!session) redirect("/admin/login");
   // بيانات الدفع وسكربتات التتبّع للمالك فقط — الإجراءات نفسها تتحقق بـ requireOwner على الخادم
   const isOwner = session.role === AdminRole.OWNER;
+  const demo = isOwner ? await getDemoDataSummary() : null;
+  const demoLines = demo
+    ? [
+        demo.products && `${demo.products} منتج تجريبي (مع ${demo.reviews} تقييم)`,
+        demo.orders && `${demo.orders} طلب تجريبي`,
+        demo.customers && `${demo.customers} عميل وهمي`,
+        demo.categories && `${demo.categories} تصنيف تجريبي`,
+        demo.coupons && `${demo.coupons} كوبون تجريبي`,
+        demo.demoIban && "رقم آيبان وهمي في إعدادات التحويل البنكي",
+      ].filter((l): l is string => Boolean(l))
+    : [];
 
   const [bank, gateway, storeInfo, seo, users] = await Promise.all([
     getBankTransferSettings(),
@@ -163,6 +176,12 @@ export default async function AdminSettingsPage() {
               </div>
             </Section>
           </form>
+        )}
+
+        {isOwner && demoLines.length > 0 && (
+          <Section title="البيانات التجريبية" desc="بيانات العرض التجريبي التي جاءت مع المتجر — احذفها قبل إضافة منتجاتك الحقيقية.">
+            <RemoveDemoDataForm summary={demoLines} />
+          </Section>
         )}
 
         <Section title="المستخدمون والصلاحيات" desc="حسابات الدخول إلى لوحة التحكم.">

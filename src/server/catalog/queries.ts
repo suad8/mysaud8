@@ -41,14 +41,23 @@ function toCard(p: CardRow): ProductCardData {
 
 const LIVE = { status: "ACTIVE", deletedAt: null } as const;
 
-export async function getFeaturedProducts(limit = 8): Promise<ProductCardData[]> {
+/** المنتجات البارزة بترتيب المدير (صفحة الثيم)، وما لم يُرتَّب بعدها حسب الأحدث. */
+export async function getFeaturedProducts(limit = 8, order: string[] = []): Promise<ProductCardData[]> {
   const rows = await db.product.findMany({
     where: { ...LIVE, isFeatured: true },
-    select: cardSelect,
+    select: { ...cardSelect, id: true },
     orderBy: { createdAt: "desc" },
-    take: limit,
+    take: 100,
   });
-  return rows.map(toCard);
+  const rank = (id: string) => {
+    const i = order.indexOf(id);
+    return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+  };
+  return rows
+    .map((row, i) => ({ row, i }))
+    .sort((a, b) => rank(a.row.id) - rank(b.row.id) || a.i - b.i)
+    .slice(0, limit)
+    .map(({ row }) => toCard(row));
 }
 
 const ALL_PRODUCTS_PAGE_SIZE = 24;

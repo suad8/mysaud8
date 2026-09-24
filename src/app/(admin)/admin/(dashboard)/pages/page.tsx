@@ -13,21 +13,25 @@ export default async function AdminPagesPage() {
   await requireAdminPage();
   const pages = await db.page.findMany({ orderBy: { createdAt: "asc" } });
   const missingDefaults = DEFAULT_SLUGS.filter((s) => !pages.some((p) => p.slug === s));
+  // صفحات أساسية موجودة لكن فارغة (أُنشئت قبل توفر النص المبدئي) — تُعبّأ بالزر نفسه
+  const emptyDefaults = pages.filter((p) => DEFAULT_SLUGS.includes(p.slug) && !p.content.trim());
 
   return (
     <>
       <Topbar title="الصفحات" subtitle={`${formatNumber(pages.length)} صفحة — من نحن، سياسة الإرجاع، الخصوصية وغيرها`} />
       <div className="space-y-6 p-5 lg:p-8">
-        {missingDefaults.length > 0 && (
+        {(missingDefaults.length > 0 || emptyDefaults.length > 0) && (
           <section className="surface-card flex flex-wrap items-center justify-between gap-4 bg-brand-50 p-5 dark:bg-brand-950/40">
             <div>
-              <h2 className="text-sm font-semibold">الصفحات الأساسية غير موجودة بعد</h2>
+              <h2 className="text-sm font-semibold">
+                {missingDefaults.length > 0 ? "الصفحات الأساسية غير موجودة بعد" : "بعض الصفحات الأساسية فارغة"}
+              </h2>
               <p className="mt-1 text-xs text-muted">
-                روابط الفوتر الافتراضية تشير لصفحات (من نحن، الشحن، الإرجاع، الخصوصية، الشروط، تواصل معنا). أنشئها كمسودات ثم اكتب محتواها وانشرها.
+                روابط الفوتر تشير لصفحات (من نحن، الشحن، الاسترجاع، الخصوصية، الشروط، تواصل معنا). أنشئها بنص مبدئي جاهز لمتجر طباعة، راجعه وأكمل ما بين [ ] ثم انشرها — الرابط يظهر في الفوتر تلقائياً بعد النشر.
               </p>
             </div>
             <form action={createDefaultPagesAction}>
-              <Button type="submit" size="sm">إنشاء الصفحات الأساسية</Button>
+              <Button type="submit" size="sm">{missingDefaults.length > 0 ? "إنشاء الصفحات الأساسية" : "تعبئتها بنص مبدئي"}</Button>
             </form>
           </section>
         )}
