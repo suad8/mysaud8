@@ -47,6 +47,14 @@ const EMPTY: ProductFormInitial = {
 
 type Action = (state: ProductFormState, formData: FormData) => Promise<ProductFormState>;
 
+type EditableVariant = { key: string; id: string | null; nameAr: string; price: string; stock: string };
+
+let rowCounter = 0;
+function newRowKey() {
+  rowCounter += 1;
+  return `new-${rowCounter}`;
+}
+
 export function ProductForm({
   mode,
   action,
@@ -61,6 +69,38 @@ export function ProductForm({
   const data = initial ?? EMPTY;
   const [state, formAction, isPending] = useActionState(action, {});
   const [imageName, setImageName] = useState<string | null>(null);
+
+  const [multiOption, setMultiOption] = useState(data.variants.length > 1);
+  const [rows, setRows] = useState<EditableVariant[]>(() =>
+    data.variants.length > 0
+      ? data.variants.map((v) => ({ key: v.id, id: v.id, nameAr: v.nameAr === "الافتراضي" ? "" : v.nameAr, price: v.price, stock: String(v.stock) }))
+      : [{ key: newRowKey(), id: null, nameAr: "", price: data.basePrice, stock: "0" }],
+  );
+  const [removedIds, setRemovedIds] = useState<string[]>([]);
+
+  function addRow() {
+    setRows((r) => [...r, { key: newRowKey(), id: null, nameAr: "", price: "", stock: "0" }]);
+  }
+
+  function removeRow(key: string) {
+    setRows((r) => {
+      if (r.length <= 1) return r;
+      const row = r.find((x) => x.key === key);
+      if (row?.id) setRemovedIds((ids) => [...ids, row.id!]);
+      return r.filter((x) => x.key !== key);
+    });
+  }
+
+  function updateRow(key: string, field: "nameAr" | "price" | "stock", value: string) {
+    setRows((r) => r.map((row) => (row.key === key ? { ...row, [field]: value } : row)));
+  }
+
+  function toggleMultiOption(checked: boolean) {
+    setMultiOption(checked);
+    if (checked && rows.length === 1 && !rows[0].nameAr) {
+      updateRow(rows[0].key, "nameAr", "الخيار الأول");
+    }
+  }
 
   const err = (field: string) => state.fieldErrors?.[field];
 
@@ -115,56 +155,70 @@ export function ProductForm({
             <p className="mt-2 text-[11px] text-muted">JPG أو PNG أو WEBP، حتى 5 ميغابايت.</p>
           </section>
 
-          {/* جدول المتغيّرات يظهر فقط لمنتج بعدّة خيارات (مقاس/لون...). المنتج
-              بمتغيّر واحد يُدار سعره ومخزونه من حقلي "التسعير" و"المخزون"
-              بالعمود الجانبي مباشرة، تفادياً لحقل سعر مكرّر يسبب تعارضاً. */}
-          {mode === "edit" && data.variants.length > 1 && (
-            <section className="surface-card overflow-hidden">
-              <div className="p-5 pb-0">
-                <h2 className="text-sm font-semibold">المتغيّرات والمخزون</h2>
-                <p className="mt-1 text-xs text-muted">تعديل السعر أو الكمية يُحفظ مع بقية النموذج عند الضغط على حفظ.</p>
+          {/* خيارات المنتج: منتج بخيار واحد يُدار سعره ومخزونه من حقلي "التسعير"
+              و"المخزون" بالعمود الجانبي مباشرة. عند تفعيل "عدة خيارات" يظهر
+              جدول قابل للإضافة والحذف — مناسب لمنتجات بمقاسات/أنواع متعددة
+              (مثلاً: مقاسات ورق وأنواع طباعة مختلفة). */}
+          <section className="surface-card p-5">
+            <label className="flex items-center gap-2.5 text-sm font-medium">
+              <input
+                type="checkbox"
+                checked={multiOption}
+                onChange={(e) => toggleMultiOption(e.target.checked)}
+                className="h-4 w-4 accent-brand-600"
+              />
+              هذا المنتج له أكثر من خيار (مقاس، نوع، لون...)
+            </label>
+            <input type="hidden" name="multiOption" value={multiOption ? "on" : ""} />
+
+            {multiOption && (
+              <div className="mt-4 space-y-3">
+                {removedIds.map((id) => (
+                  <input key={id} type="hidden" name="removeVariantId" value={id} />
+                ))}
+                {rows.map((row) => (
+                  <div key={row.key} className="flex items-center gap-2.5">
+                    <input type="hidden" name="variantId" value={row.id ?? ""} />
+                    <input
+                      name="variantName"
+                      value={row.nameAr}
+                      onChange={(e) => updateRow(row.key, "nameAr", e.target.value)}
+                      placeholder="اسم الخيار (مثال: A4 - ورق لامع)"
+                      className="h-10 flex-1 rounded-lg border bg-transparent px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500/40"
+                    />
+                    <input
+                      name="variantPrice"
+                      value={row.price}
+                      onChange={(e) => updateRow(row.key, "price", e.target.value)}
+                      inputMode="decimal"
+                      placeholder="السعر"
+                      className="num h-10 w-24 rounded-lg border bg-transparent px-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-500/40"
+                    />
+                    <input
+                      name="variantStock"
+                      value={row.stock}
+                      onChange={(e) => updateRow(row.key, "stock", e.target.value)}
+                      inputMode="numeric"
+                      placeholder="المخزون"
+                      className="num h-10 w-20 rounded-lg border bg-transparent px-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-500/40"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeRow(row.key)}
+                      disabled={rows.length <= 1}
+                      className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-muted hover:bg-red-50 hover:text-red-600 disabled:opacity-30 dark:hover:bg-red-950"
+                      aria-label="إزالة الخيار"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                <button type="button" onClick={addRow} className="text-xs font-medium text-brand-700 hover:underline">
+                  + إضافة خيار آخر
+                </button>
               </div>
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-xs text-muted">
-                      <th className="px-5 py-3 text-start font-medium">المتغيّر</th>
-                      <th className="px-5 py-3 text-start font-medium">SKU</th>
-                      <th className="px-5 py-3 text-start font-medium">السعر</th>
-                      <th className="px-5 py-3 text-start font-medium">المخزون</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.variants.map((v) => (
-                      <tr key={v.id} className="border-t">
-                        <td className="px-5 py-3 font-medium">
-                          {v.nameAr}
-                          <input type="hidden" name="variantId" value={v.id} />
-                        </td>
-                        <td className="num px-5 py-3 text-muted">{v.sku}</td>
-                        <td className="px-5 py-3">
-                          <input
-                            name={`variantPrice_${v.id}`}
-                            defaultValue={v.price}
-                            inputMode="decimal"
-                            className="num h-9 w-24 rounded-lg border bg-transparent px-2.5 outline-none focus:ring-2 focus:ring-brand-500/40"
-                          />
-                        </td>
-                        <td className="px-5 py-3">
-                          <input
-                            name={`variantStock_${v.id}`}
-                            defaultValue={v.stock}
-                            inputMode="numeric"
-                            className="num h-9 w-20 rounded-lg border bg-transparent px-2.5 outline-none focus:ring-2 focus:ring-brand-500/40"
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          )}
+            )}
+          </section>
         </div>
 
         <div className="space-y-6">
@@ -205,10 +259,10 @@ export function ProductForm({
               <Field name="basePrice" label="السعر الأساسي" defaultValue={data.basePrice} inputMode="decimal" className="num" error={err("basePrice")} />
               <Field name="comparePrice" label="سعر ما قبل الخصم (اختياري)" defaultValue={data.comparePrice} inputMode="decimal" className="num" error={err("comparePrice")} />
               <Field name="costPrice" label="التكلفة (داخلي، اختياري)" defaultValue={data.costPrice} inputMode="decimal" className="num" error={err("costPrice")} />
-              {mode === "create" && (
+              {!multiOption && mode === "create" && (
                 <Field name="stock" label="الكمية الأولية في المخزون" defaultValue="0" inputMode="numeric" className="num" error={err("stock")} />
               )}
-              {mode === "edit" && data.variants.length === 1 && (
+              {!multiOption && mode === "edit" && data.variants.length === 1 && (
                 <Field name="stock" label="الكمية في المخزون" defaultValue={String(data.variants[0].stock)} inputMode="numeric" className="num" error={err("stock")} />
               )}
             </div>

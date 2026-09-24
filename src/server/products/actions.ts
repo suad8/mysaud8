@@ -37,6 +37,48 @@ async function uniqueSlug(base: string): Promise<string> {
   return slug;
 }
 
+type VariantInput = { id: string | null; nameAr: string; price: number; stock: number };
+
+/** يقرأ صفوف الخيارات المتعددة من الحقول المتكررة الاسم (formData.getAll) ويتحقق من صحتها. */
+function parseVariantRows(formData: FormData): { error: string } | { rows: VariantInput[] } {
+  const ids = formData.getAll("variantId").map((v) => String(v));
+  const names = formData.getAll("variantName").map((v) => String(v).trim());
+  const prices = formData.getAll("variantPrice").map((v) => String(v).trim());
+  const stocks = formData.getAll("variantStock").map((v) => String(v).trim());
+
+  if (names.length === 0) return { error: "أضف خياراً واحداً على الأقل للمنتج" };
+
+  const rows: VariantInput[] = [];
+  const seenNames = new Set<string>();
+  for (let i = 0; i < names.length; i++) {
+    const nameAr = names[i];
+    if (!nameAr) return { error: "اسم كل خيار مطلوب" };
+
+    const normalized = nameAr.toLowerCase();
+    if (seenNames.has(normalized)) return { error: `يوجد خيار مكرر بالاسم "${nameAr}"` };
+    seenNames.add(normalized);
+
+    const price = Number(prices[i]);
+    if (!prices[i] || Number.isNaN(price) || price <= 0) {
+      return { error: `سعر الخيار "${nameAr}" يجب أن يكون رقماً أكبر من صفر` };
+    }
+
+    const stock = Math.round(Number(stocks[i]));
+    if (stocks[i] === "" || Number.isNaN(stock) || stock < 0) {
+      return { error: `مخزون الخيار "${nameAr}" غير صالح` };
+    }
+
+    rows.push({ id: ids[i] || null, nameAr, price: round2(price), stock });
+  }
+  return { rows };
+}
+
+/** SKU عشوائي مقروء لخيار جديد — يكفي احتمال التصادم الضئيل جداً نطاق كتالوج متجر واحد. */
+function variantSku(base: string, index: number): string {
+  const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `${base}-${index + 1}-${Date.now().toString().slice(-5)}${rand}`;
+}
+
 function parseProductFields(formData: FormData) {
   const fieldErrors: Record<string, string> = {};
 
@@ -89,6 +131,14 @@ export async function createProductAction(
   const parsed = parseProductFields(formData);
   if (Object.keys(parsed.fieldErrors).length > 0) return { fieldErrors: parsed.fieldErrors };
 
+  const multiOption = formData.get("multiOption") === "on";
+  let variantRows: VariantInput[] = [];
+  if (multiOption) {
+    const result = parseVariantRows(formData);
+    if ("error" in result) return { error: result.error };
+    variantRows = result.rows;
+  }
+
   let imageUrl: string | null = null;
   const file = formData.get("image");
   if (file instanceof File && file.size > 0) {
@@ -100,7 +150,27 @@ export async function createProductAction(
   }
 
   const slug = await uniqueSlug(slugify(parsed.nameAr));
-  const sku = `${slug.toUpperCase().slice(0, 12)}-${Date.now().toString().slice(-4)}`;
+  const skuBase = slug.toUpperCase().slice(0, 10);
+
+  const variantsCreate = multiOption
+    ? variantRows.map((row, i) => ({
+        sku: variantSku(skuBase, i),
+        nameAr: row.nameAr,
+        options: {},
+        price: row.price,
+        comparePrice: parsed.comparePrice,
+        inventory: { create: { onHand: row.stock, reserved: 0, lowStockAt: 5 } },
+      }))
+    : [
+        {
+          sku: variantSku(skuBase, 0),
+          nameAr: "الافتراضي",
+          options: {},
+          price: parsed.basePrice,
+          comparePrice: parsed.comparePrice,
+          inventory: { create: { onHand: parsed.stock, reserved: 0, lowStockAt: 5 } },
+        },
+      ];
 
   let productId: string;
   try {
@@ -119,18 +189,7 @@ export async function createProductAction(
         metaTitle: parsed.nameAr,
         metaDesc: parsed.shortDescAr,
         images: imageUrl ? { create: [{ url: imageUrl, alt: parsed.nameAr, position: 0 }] } : undefined,
-        variants: {
-          create: [
-            {
-              sku,
-              nameAr: "الافتراضي",
-              options: {},
-              price: parsed.basePrice,
-              comparePrice: parsed.comparePrice,
-              inventory: { create: { onHand: parsed.stock, reserved: 0, lowStockAt: 5 } },
-            },
-          ],
-        },
+        variants: { create: variantsCreate },
       },
       select: { id: true },
     });
@@ -139,7 +198,13 @@ export async function createProductAction(
     return { error: "حدث خطأ أثناء إنشاء المنتج، يرجى المحاولة مرة أخرى." };
   }
 
-  await logAudit({ actorId: session.sub, action: "product.created", entity: "Product", entityId: productId, diff: { nameAr: parsed.nameAr } });
+  await logAudit({
+    actorId: session.sub,
+    action: "product.created",
+    entity: "Product",
+    entityId: productId,
+    diff: { nameAr: parsed.nameAr, variantCount: variantsCreate.length },
+  });
 
   revalidatePath("/admin/products");
   revalidatePath("/admin/inventory");
@@ -156,6 +221,15 @@ export async function updateProductAction(
 
   const parsed = parseProductFields(formData);
   if (Object.keys(parsed.fieldErrors).length > 0) return { fieldErrors: parsed.fieldErrors };
+
+  const multiOption = formData.get("multiOption") === "on";
+  let variantRows: VariantInput[] = [];
+  const removeIds = formData.getAll("removeVariantId").map((v) => String(v)).filter(Boolean);
+  if (multiOption) {
+    const result = parseVariantRows(formData);
+    if ("error" in result) return { error: result.error };
+    variantRows = result.rows;
+  }
 
   let newImageUrl: string | null = null;
   const file = formData.get("image");
@@ -189,30 +263,53 @@ export async function updateProductAction(
         await tx.productImage.create({ data: { productId, url: newImageUrl, alt: parsed.nameAr, position: maxPos } });
       }
 
-      const variants = await tx.productVariant.findMany({ where: { productId }, select: { id: true } });
+      if (multiOption) {
+        // الصفوف المُرسلة تمثل مجموعة الخيارات النهائية المطلوبة؛ الحذف يُطبَّق
+        // فقط على الخيارات القديمة غير الموجودة ضمنها (احتياط دفاعي إضافي).
+        const keepIds = new Set(variantRows.map((r) => r.id).filter((id): id is string => Boolean(id)));
+        const finalRemoveIds = removeIds.filter((id) => !keepIds.has(id));
 
-      if (variants.length === 1) {
-        // منتج بمتغيّر واحد: سعره ومخزونه هما نفس حقلي "التسعير"/"المخزون"
-        // بالنموذج مباشرة — لا يوجد جدول متغيّرات منفصل يُقرأ منه هنا.
-        await tx.productVariant.update({
-          where: { id: variants[0].id },
-          data: { price: parsed.basePrice, comparePrice: parsed.comparePrice },
-        });
-        await tx.inventoryItem.update({ where: { variantId: variants[0].id }, data: { onHand: parsed.stock } });
+        if (finalRemoveIds.length > 0) {
+          // سلال العملاء تشير لهذه الخيارات بقيد FK إلزامي؛ يجب تفريغها أولاً
+          await tx.cartItem.deleteMany({ where: { variantId: { in: finalRemoveIds } } });
+          await tx.productVariant.deleteMany({ where: { id: { in: finalRemoveIds }, productId } });
+        }
+
+        const skuBase = productId.toUpperCase().slice(0, 10);
+        let newIndex = 0;
+        for (const row of variantRows) {
+          if (row.id) {
+            await tx.productVariant.update({
+              where: { id: row.id },
+              data: { nameAr: row.nameAr, price: row.price, comparePrice: parsed.comparePrice },
+            });
+            await tx.inventoryItem.update({ where: { variantId: row.id }, data: { onHand: row.stock } });
+          } else {
+            await tx.productVariant.create({
+              data: {
+                productId,
+                sku: variantSku(skuBase, newIndex),
+                nameAr: row.nameAr,
+                options: {},
+                price: row.price,
+                comparePrice: parsed.comparePrice,
+                inventory: { create: { onHand: row.stock, reserved: 0, lowStockAt: 5 } },
+              },
+            });
+            newIndex += 1;
+          }
+        }
       } else {
-        // عدّة متغيّرات: كل صف بجدول المتغيّرات يرسل سعره ومخزونه الخاص
-        for (const { id: vId } of variants) {
-          const priceRaw = formData.get(`variantPrice_${vId}`);
-          const stockRaw = formData.get(`variantStock_${vId}`);
-          const price = priceRaw != null && priceRaw !== "" ? Number(priceRaw) : null;
-          const stock = stockRaw != null && stockRaw !== "" ? Math.round(Number(stockRaw)) : null;
-
-          if (price != null && !Number.isNaN(price) && price > 0) {
-            await tx.productVariant.update({ where: { id: vId }, data: { price: round2(price) } });
-          }
-          if (stock != null && !Number.isNaN(stock) && stock >= 0) {
-            await tx.inventoryItem.update({ where: { variantId: vId }, data: { onHand: stock } });
-          }
+        // منتج بمتغيّر واحد: سعره ومخزونه هما نفس حقلي "التسعير"/"المخزون" بالنموذج مباشرة.
+        // إن كان للمنتج عدّة متغيّرات وتم إلغاء تفعيل "خيارات متعددة" دون تعديلها،
+        // نتركها كما هي تفادياً لحذف بيانات دون طلب صريح من المدير.
+        const variants = await tx.productVariant.findMany({ where: { productId }, select: { id: true } });
+        if (variants.length === 1) {
+          await tx.productVariant.update({
+            where: { id: variants[0].id },
+            data: { price: parsed.basePrice, comparePrice: parsed.comparePrice },
+          });
+          await tx.inventoryItem.update({ where: { variantId: variants[0].id }, data: { onHand: parsed.stock } });
         }
       }
     });
