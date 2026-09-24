@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/server/db";
-import { saveUploadedFile, UploadError } from "@/lib/uploads";
+import { deleteUploadedFile, saveUploadedFile, UploadError } from "@/lib/uploads";
 import { requireAdmin } from "@/server/auth/session";
 import { logAudit } from "@/server/audit/log";
 import { ProductStatus } from "@prisma/client";
@@ -77,6 +77,13 @@ function parseCustomFields(formData: FormData): { error: string } | { fields: Cu
   return { fields };
 }
 
+/** صورة مولّدة بالذكاء الاصطناعي (مسار داخلي فقط) — تصبح الصورة الرئيسية للمنتج */
+const AI_IMAGE_PATTERN = /^\/api\/uploads\/products\/\d+-[a-f0-9]{8}\.jpg$/;
+function readAiImageUrl(formData: FormData): string | null {
+  const url = String(formData.get("aiImageUrl") ?? "");
+  return AI_IMAGE_PATTERN.test(url) ? url : null;
+}
+
 /** SKU عشوائي مقروء لخيار جديد — يكفي احتمال التصادم الضئيل جداً نطاق كتالوج متجر واحد. */
 function variantSku(base: string, index: number): string {
   const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
@@ -147,6 +154,7 @@ export async function createProductAction(
   if ("error" in customFieldsResult) return { error: customFieldsResult.error };
   const customFields = customFieldsResult.fields;
 
+  const aiImageUrl = readAiImageUrl(formData);
   let imageUrl: string | null = null;
   const file = formData.get("image");
   if (file instanceof File && file.size > 0) {
@@ -197,7 +205,11 @@ export async function createProductAction(
         metaTitle: parsed.nameAr,
         metaDesc: parsed.shortDescAr,
         customFields,
-        images: imageUrl ? { create: [{ url: imageUrl, alt: parsed.nameAr, position: 0 }] } : undefined,
+        images: {
+          create: [aiImageUrl, imageUrl]
+            .filter((url): url is string => Boolean(url))
+            .map((url, position) => ({ url, alt: parsed.nameAr, position })),
+        },
         variants: { create: variantsCreate },
       },
       select: { id: true },
@@ -244,6 +256,9 @@ export async function updateProductAction(
   if ("error" in customFieldsResult) return { error: customFieldsResult.error };
   const customFields = customFieldsResult.fields;
 
+  const aiImageUrl = readAiImageUrl(formData);
+  const removeImageIds = formData.getAll("removeImageId").map(String).filter(Boolean);
+  let removedImageUrls: string[] = [];
   let newImageUrl: string | null = null;
   const file = formData.get("image");
   if (file instanceof File && file.size > 0) {
@@ -272,9 +287,21 @@ export async function updateProductAction(
         },
       });
 
+      if (removeImageIds.length > 0) {
+        const toRemove = await tx.productImage.findMany({ where: { productId, id: { in: removeImageIds } }, select: { url: true } });
+        await tx.productImage.deleteMany({ where: { productId, id: { in: removeImageIds } } });
+        removedImageUrls = toRemove.map((i) => i.url);
+      }
+
+      if (aiImageUrl) {
+        // الصورة المولّدة تتصدّر (الصورة الرئيسية) وتُزاح البقية خطوة
+        await tx.productImage.updateMany({ where: { productId }, data: { position: { increment: 1 } } });
+        await tx.productImage.create({ data: { productId, url: aiImageUrl, alt: parsed.nameAr, position: 0 } });
+      }
+
       if (newImageUrl) {
-        const maxPos = await tx.productImage.count({ where: { productId } });
-        await tx.productImage.create({ data: { productId, url: newImageUrl, alt: parsed.nameAr, position: maxPos } });
+        const last = await tx.productImage.aggregate({ where: { productId }, _max: { position: true } });
+        await tx.productImage.create({ data: { productId, url: newImageUrl, alt: parsed.nameAr, position: (last._max.position ?? -1) + 1 } });
       }
 
       if (multiOption) {
@@ -331,6 +358,8 @@ export async function updateProductAction(
     return { error: "حدث خطأ أثناء حفظ التغييرات، يرجى المحاولة مرة أخرى." };
   }
 
+  // ملفات الصور المحذوفة من مجلد الرفع (الصور الثابتة داخل public/products تبقى)
+  await Promise.all(removedImageUrls.map(deleteUploadedFile));
   await logAudit({ actorId: session.sub, action: "product.updated", entity: "Product", entityId: productId });
 
   revalidatePath(`/admin/products/${productId}`);

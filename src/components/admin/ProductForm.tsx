@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import type { ProductFormState } from "@/server/products/actions";
 import type { CustomFieldDef, CustomFieldType } from "@/server/products/custom-fields";
+import { AiImageGenerator } from "@/components/admin/AiImageGenerator";
 
 type Category = { id: string; nameAr: string };
 
@@ -70,17 +71,22 @@ export function ProductForm({
   action,
   categories,
   initial,
+  aiEnabled = false,
 }: {
   mode: "create" | "edit";
   action: Action;
   categories: Category[];
   initial?: ProductFormInitial;
+  /** توليد الصور بـ Gemini مفعّل (GEMINI_API_KEY مضبوط على الخادم) */
+  aiEnabled?: boolean;
 }) {
   const data = initial ?? EMPTY;
   const [state, formAction, isPending] = useActionState(action, {});
   const [imageName, setImageName] = useState<string | null>(null);
   const [clientError, setClientError] = useState<string | null>(null);
+  const [removedImageIds, setRemovedImageIds] = useState<string[]>([]);
   const topRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const hasErrors = Boolean(clientError || state.error || (state.fieldErrors && Object.keys(state.fieldErrors).length > 0));
   // عند فشل الحفظ: انتقل لأعلى النموذج حيث رسالة الخطأ — كانت تظهر خارج الشاشة فيبدو كأن الحفظ لم يحدث
@@ -156,7 +162,7 @@ export function ProductForm({
   const errorMessage = clientError ?? state.error ?? (state.fieldErrors && Object.keys(state.fieldErrors).length > 0 ? "لم يتم الحفظ — راجع الحقول المظلّلة بالأحمر." : null);
 
   return (
-    <form action={formAction} onSubmit={handleSubmit}>
+    <form ref={formRef} action={formAction} onSubmit={handleSubmit}>
       <div ref={topRef} className="scroll-mt-24" />
       {errorMessage && (
         <div role="alert" className="mb-6 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-inset ring-red-200 dark:bg-red-950 dark:text-red-300">
@@ -186,11 +192,26 @@ export function ProductForm({
           <section className="surface-card p-5">
             <h2 className="text-sm font-semibold">الصور</h2>
             <div className="mt-4 grid grid-cols-4 gap-3 sm:grid-cols-5">
-              {data.images.map((img) => (
-                <div key={img.id} className="relative aspect-square overflow-hidden rounded-xl bg-[var(--surface-sunken)]">
-                  <Image src={img.url} alt={img.alt ?? ""} fill sizes="120px" className="object-cover" />
-                </div>
+              {removedImageIds.map((id) => (
+                <input key={id} type="hidden" name="removeImageId" value={id} />
               ))}
+              {data.images.map((img) => {
+                const removed = removedImageIds.includes(img.id);
+                return (
+                  <div key={img.id} className="relative aspect-square overflow-hidden rounded-xl bg-[var(--surface-sunken)]">
+                    <Image src={img.url} alt={img.alt ?? ""} fill sizes="120px" className={`object-cover ${removed ? "opacity-25" : ""}`} />
+                    <button
+                      type="button"
+                      onClick={() => setRemovedImageIds((ids) => (removed ? ids.filter((x) => x !== img.id) : [...ids, img.id]))}
+                      className={`absolute end-1 top-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${removed ? "bg-white text-ink-900" : "bg-red-600 text-white"}`}
+                      aria-label={removed ? "تراجع عن حذف الصورة" : "حذف الصورة"}
+                    >
+                      {removed ? "تراجع" : "حذف ✕"}
+                    </button>
+                    {removed && <span className="absolute inset-x-0 bottom-1 text-center text-[11px] font-semibold text-red-700">تُحذف عند الحفظ</span>}
+                  </div>
+                );
+              })}
               <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed text-muted hover:border-brand-400 hover:text-brand-600">
                 <input
                   type="file"
@@ -205,6 +226,10 @@ export function ProductForm({
             </div>
             {err("image") && <p className="mt-2 text-xs text-red-600">{err("image")}</p>}
             <p className="mt-2 text-[11px] text-muted">JPG أو PNG أو WEBP، حتى 5 ميغابايت.</p>
+            <AiImageGenerator
+              enabled={aiEnabled}
+              getProductName={() => formRef.current?.querySelector<HTMLInputElement>('input[name="nameAr"]')?.value ?? ""}
+            />
           </section>
 
           {/* خيارات المنتج: منتج بخيار واحد يُدار سعره ومخزونه من حقلي "التسعير"

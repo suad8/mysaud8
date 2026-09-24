@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Topbar } from "@/components/admin/Topbar";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { isAiImageConfigured } from "@/server/ai/gemini";
 import { ProductForm, type ProductFormInitial } from "@/components/admin/ProductForm";
 import { ConfirmSubmitButton } from "@/components/admin/ConfirmSubmitButton";
 import { db } from "@/server/db";
@@ -93,7 +94,7 @@ export default async function EditProductPage({ params }: Props) {
           </form>
         </div>
 
-        <ProductForm mode="edit" action={boundUpdate} categories={categories} initial={initial} />
+        <ProductForm aiEnabled={isAiImageConfigured()} mode="edit" action={boundUpdate} categories={categories} initial={initial} />
       </div>
     </>
   );

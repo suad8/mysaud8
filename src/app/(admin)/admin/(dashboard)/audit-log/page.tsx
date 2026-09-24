@@ -42,6 +42,7 @@ const ACTION_LABEL: Record<string, string> = {
   "review.deleted": "حذف تقييم",
   "theme.updated": "تحديث الثيم",
   "demo.removed": "حذف البيانات التجريبية",
+  "ai.imageGenerated": "توليد صورة بالذكاء الاصطناعي",
   "category.created": "إنشاء تصنيف",
   "category.updated": "تعديل تصنيف",
   "category.deleted": "حذف تصنيف",

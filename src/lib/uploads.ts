@@ -88,3 +88,25 @@ export async function deleteUploadedFile(url: string): Promise<void> {
   if (!match) return;
   await unlink(path.join(process.cwd(), "public", "uploads", match[1]!, match[2]!)).catch(() => {});
 }
+
+const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+/** يقرأ صورة مرفوعة ويتحقق من نوعها الحقيقي دون حفظها (مثل شعار يُرسل للذكاء الاصطناعي). */
+export async function readValidatedImage(file: File): Promise<{ buffer: Buffer; mimeType: string }> {
+  if (!file || file.size === 0) throw new UploadError("لم يتم اختيار ملف");
+  if (file.size > MAX_SIZE_BYTES) throw new UploadError("حجم الملف يتجاوز 5 ميغابايت");
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const realType = detectRealType(buffer);
+  if (!realType || !IMAGE_TYPES.has(realType)) throw new UploadError("يرجى رفع صورة JPG أو PNG أو WEBP");
+  return { buffer, mimeType: realType };
+}
+
+/** يحفظ صورة JPEG مولَّدة على الخادم (بعد التحقق من توقيعها) ويعيد رابطها. */
+export async function saveJpegBuffer(buffer: Buffer, subdir: string): Promise<string> {
+  if (detectRealType(buffer) !== "image/jpeg") throw new UploadError("صورة غير صالحة");
+  const dir = path.join(process.cwd(), "public", "uploads", subdir);
+  await mkdir(dir, { recursive: true });
+  const filename = `${Date.now()}-${randomUUID().slice(0, 8)}.jpg`;
+  await writeFile(path.join(dir, filename), buffer);
+  return `/api/uploads/${subdir}/${filename}`;
+}
