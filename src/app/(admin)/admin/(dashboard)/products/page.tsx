@@ -11,8 +11,16 @@ import type { Prisma, ProductStatus } from "@prisma/client";
 import { requireAdminPage } from "@/server/auth/session";
 import { duplicateProductAction, toggleProductFeaturedAction, toggleProductVisibilityAction } from "@/server/products/actions";
 import { promoClass } from "@/lib/promo";
+import { BULK_FORM_ID, ProductsBulkBar } from "@/components/admin/ProductsBulkBar";
 
-type Props = { searchParams: Promise<{ q?: string; status?: string }> };
+type Props = { searchParams: Promise<{ q?: string; status?: string; show?: string }> };
+
+const SHOW_OPTIONS = [
+  { value: "", label: "كل المنتجات" },
+  { value: "featured", label: "البارزة ⭐" },
+  { value: "oos", label: "نفد مخزونها" },
+  { value: "low", label: "مخزون منخفض (5 أو أقل)" },
+] as const;
 
 const STATUS_OPTIONS: { value: ProductStatus | "ALL"; label: string }[] = [
   { value: "ALL", label: "كل الحالات" },
@@ -23,11 +31,12 @@ const STATUS_OPTIONS: { value: ProductStatus | "ALL"; label: string }[] = [
 
 export default async function AdminProductsPage({ searchParams }: Props) {
   await requireAdminPage();
-  const { q = "", status = "ALL" } = await searchParams;
+  const { q = "", status = "ALL", show = "" } = await searchParams;
 
   const where: Prisma.ProductWhereInput = {
     deletedAt: null,
     ...(status !== "ALL" ? { status: status as ProductStatus } : {}),
+    ...(show === "featured" ? { isFeatured: true } : {}),
     ...(q.trim()
       ? {
           OR: [
@@ -38,7 +47,7 @@ export default async function AdminProductsPage({ searchParams }: Props) {
       : {}),
   };
 
-  const [products, totalCount] = await Promise.all([
+  const [allProducts, totalCount] = await Promise.all([
     db.product.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -51,7 +60,11 @@ export default async function AdminProductsPage({ searchParams }: Props) {
     db.product.count({ where: { deletedAt: null } }),
   ]);
 
-  const isFiltered = Boolean(q.trim()) || status !== "ALL";
+  const available = (p: (typeof allProducts)[number]) =>
+    p.variants.filter((v) => v.isActive).reduce((s, v) => s + Math.max(0, (v.inventory?.onHand ?? 0) - (v.inventory?.reserved ?? 0)), 0);
+  // فلاتر المخزون تُحسب من المتاح فعلاً (الموجود − المحجوز لطلبات قائمة)
+  const products = show === "oos" ? allProducts.filter((p) => available(p) === 0) : show === "low" ? allProducts.filter((p) => available(p) > 0 && available(p) <= 5) : allProducts;
+  const isFiltered = Boolean(q.trim()) || status !== "ALL" || show !== "";
 
   return (
     <>
@@ -71,8 +84,13 @@ export default async function AdminProductsPage({ searchParams }: Props) {
               placeholder="ابحث بالاسم أو SKU…"
               className="h-10 flex-1 min-w-48 rounded-lg border bg-transparent px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500/40"
             />
-            <select name="status" defaultValue={status} className="h-10 rounded-lg border bg-transparent px-3 text-sm outline-none">
+            <select name="status" defaultValue={status} aria-label="الحالة" className="h-10 rounded-lg border bg-transparent px-3 text-sm outline-none">
               {STATUS_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            <select name="show" defaultValue={show} aria-label="عرض" className="h-10 rounded-lg border bg-transparent px-3 text-sm outline-none">
+              {SHOW_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
@@ -106,9 +124,11 @@ export default async function AdminProductsPage({ searchParams }: Props) {
             </div>
           ) : (
             <div className="overflow-x-auto">
+              <ProductsBulkBar />
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-start text-xs text-muted">
+                    <th className="w-10 py-3 ps-5"></th>
                     <th className="px-5 py-3 text-start font-medium">المنتج</th>
                     <th className="px-5 py-3 text-start font-medium">التصنيف</th>
                     <th className="px-5 py-3 text-start font-medium">السعر</th>
@@ -120,9 +140,12 @@ export default async function AdminProductsPage({ searchParams }: Props) {
                 <tbody>
                   {products.map((p) => {
                     const meta = PRODUCT_STATUS[p.status];
-                    const stock = p.variants.reduce((s, v) => s + Math.max(0, (v.inventory?.onHand ?? 0) - (v.inventory?.reserved ?? 0)), 0);
+                    const stock = available(p);
                     return (
                       <tr key={p.id} className="border-t transition-colors hover:bg-ink-50 dark:hover:bg-ink-800/40">
+                        <td className="py-3 ps-5">
+                          <input type="checkbox" name="ids" value={p.id} form={BULK_FORM_ID} aria-label={`تحديد ${p.nameAr}`} className="h-4 w-4 accent-brand-600" />
+                        </td>
                         <td className="px-5 py-3">
                           <Link href={`/admin/products/${p.id}`} className="flex items-center gap-3">
                             <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-[var(--surface-sunken)]">
@@ -131,7 +154,7 @@ export default async function AdminProductsPage({ searchParams }: Props) {
                             <div className="min-w-0">
                               <p className="truncate font-medium">{p.nameAr}</p>
                               <p className="flex items-center gap-1.5 text-xs text-muted">
-                                {p.variants.length} متغيّر
+                                {p.variants.filter((v) => v.isActive).length} متغيّر
                                 {p.promoTitle && <span className={`rounded-full px-1.5 py-px text-[10px] font-bold ${promoClass(p.promoColor)}`}>{p.promoTitle}</span>}
                               </p>
                             </div>

@@ -2,10 +2,11 @@ import { Header } from "@/components/storefront/Header";
 import { Footer } from "@/components/storefront/Footer";
 import { MaintenanceScreen } from "@/components/storefront/MaintenanceScreen";
 import { getSession } from "@/server/auth/session";
-import { getMaintenanceSettings, getStoreInfoSettings } from "@/server/settings";
+import { FloatingWhatsApp } from "@/components/storefront/FloatingWhatsApp";
+import { getMaintenanceSettings, getStoreInfoSettings, getThemeSettings } from "@/server/settings";
 
 export default async function StorefrontLayout({ children }: { children: React.ReactNode }) {
-  const maintenance = await getMaintenanceSettings();
+  const [maintenance, theme] = await Promise.all([getMaintenanceSettings(), getThemeSettings()]);
   const isAdmin = maintenance.enabled ? Boolean(await getSession()) : false;
 
   // وضع الصيانة: الميدلوير يحوّل الزائر لصفحة /maintenance قبل تنفيذ أي صفحة؛ هذا خط دفاع ثانٍ
@@ -24,6 +25,7 @@ export default async function StorefrontLayout({ children }: { children: React.R
       <Header />
       <main className="flex-1">{children}</main>
       <Footer />
+      <FloatingWhatsApp number={theme.whatsappFloatNumber} message={theme.whatsappFloatMessage} />
     </div>
   );
 }

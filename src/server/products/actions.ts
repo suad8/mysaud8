@@ -6,7 +6,7 @@ import { db } from "@/server/db";
 import { deleteUploadedFile, saveUploadedFile, UploadError } from "@/lib/uploads";
 import { requireAdmin } from "@/server/auth/session";
 import { logAudit } from "@/server/audit/log";
-import { ProductStatus } from "@prisma/client";
+import { ProductStatus, type Prisma } from "@prisma/client";
 import type { CustomFieldDef, CustomFieldType } from "@/server/products/custom-fields";
 import { slugify, uniqueSlug } from "@/lib/slug";
 import { PROMO_COLORS, PROMO_TITLE_MAX } from "@/lib/promo";
@@ -521,4 +521,40 @@ export async function duplicateProductAction(productId: string, _formData: FormD
   await logAudit({ actorId: session.sub, action: "product.duplicated", entity: "Product", entityId: copy.id, diff: { from: productId } });
   revalidatePath("/admin/products");
   redirect(`/admin/products/${copy.id}`);
+}
+
+const BULK_OPS = ["publish", "hide", "feature", "unfeature", "archive", "delete"] as const;
+type BulkOp = (typeof BULK_OPS)[number];
+
+function bulkData(op: BulkOp): Prisma.ProductUpdateManyMutationInput {
+  switch (op) {
+    case "publish":
+      return { status: "ACTIVE" };
+    case "hide":
+      return { status: "DRAFT" };
+    case "feature":
+      return { isFeatured: true };
+    case "unfeature":
+      return { isFeatured: false };
+    case "archive":
+      return { status: "ARCHIVED", isFeatured: false };
+    case "delete":
+      // حذف ناعم كحذف المنتج الواحد — سجلات الطلبات القديمة تبقى سليمة
+      return { status: "ARCHIVED", isFeatured: false, deletedAt: new Date() };
+  }
+}
+
+/** إجراء جماعي على المنتجات المحددة في قائمة المنتجات (نشر، إخفاء، تمييز، أرشفة، حذف ناعم). */
+export async function bulkProductsAction(formData: FormData) {
+  const session = await requireAdmin();
+  const op = BULK_OPS.find((o) => o === formData.get("op"));
+  if (!op) return;
+  const ids = [...new Set(formData.getAll("ids").map(String).filter((id) => id.length > 0 && id.length <= 40))].slice(0, 500);
+  if (ids.length === 0) return;
+
+  const result = await db.product.updateMany({ where: { id: { in: ids }, deletedAt: null }, data: bulkData(op) });
+  await logAudit({ actorId: session.sub, action: "products.bulkUpdated", entity: "Product", diff: { op, count: result.count } });
+
+  revalidatePath("/admin/products");
+  revalidatePath("/");
 }

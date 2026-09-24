@@ -9,6 +9,7 @@ import { deleteUploadedFile, saveUploadedFile, UploadError } from "@/lib/uploads
 import { parseCustomFieldDefs, type CustomFieldValue } from "@/server/products/custom-fields";
 import { getClientIp } from "@/lib/request-ip";
 import { createRateLimiter } from "@/lib/rate-limit";
+import { normalizePhone } from "@/lib/phone";
 
 export type CartActionState = { error?: string; success?: boolean };
 
@@ -73,6 +74,19 @@ async function readCustomFieldValues(formData: FormData, product: { customFields
   }
 
   return { values };
+}
+
+/**
+ * يحفظ جوال الزائر على سلته عند «متابعة للدفع» — حتى يظهر في «السلات المتروكة»
+ * إن لم يُكمل الطلب. يعدّل سلة الزائر نفسه فقط (من كوكي جلسته).
+ */
+export async function saveCheckoutPhoneAction(rawPhone: unknown): Promise<void> {
+  const phone = typeof rawPhone === "string" ? normalizePhone(rawPhone.slice(0, 30)) : null;
+  if (!phone) return;
+  if (!cartWrites.hit((await getClientIp()) ?? "unknown")) return;
+  const sessionId = await getCartSessionId();
+  if (!sessionId) return;
+  await db.cart.updateMany({ where: { sessionId, status: "ACTIVE" }, data: { phone, updatedAt: new Date() } });
 }
 
 export async function addToCartAction(_prevState: CartActionState, formData: FormData): Promise<CartActionState> {

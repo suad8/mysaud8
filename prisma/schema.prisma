@@ -241,6 +241,10 @@ model Cart {
   items      CartItem[]
   couponCode String?
   status     CartStatus @default(ACTIVE)
+  /// الجوال الذي كتبه الزائر في أول خطوة من الدفع — للتذكير بالسلة المتروكة
+  phone      String?
+  /// آخر مرة أرسل فيها المتجر تذكيراً بهذه السلة
+  remindedAt DateTime?
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
 

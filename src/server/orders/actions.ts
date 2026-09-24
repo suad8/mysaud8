@@ -326,3 +326,13 @@ export async function updateShipmentTrackingAction(orderId: string, formData: Fo
 
   revalidatePath(`/admin/orders/${orderId}`);
 }
+
+/** ملاحظة داخلية على الطلب (للموظفين فقط — لا تظهر للعميل). */
+export async function updateOrderNoteAction(orderId: string, formData: FormData) {
+  const session = await requireAdmin();
+  const note = String(formData.get("internalNote") ?? "").trim().slice(0, 2000);
+  const updated = await db.order.updateMany({ where: { id: orderId }, data: { internalNote: note || null } });
+  if (updated.count === 0) return;
+  await logAudit({ actorId: session.sub, action: "order.noteUpdated", entity: "Order", entityId: orderId });
+  revalidatePath(`/admin/orders/${orderId}`);
+}

@@ -11,7 +11,11 @@ import { ShipmentTrackingForm } from "@/components/admin/ShipmentTrackingForm";
 import { db } from "@/server/db";
 import { ORDER_STATUS, PAYMENT_METHOD_LABEL, type OrderStatusKey } from "@/lib/constants";
 import { formatDateTime } from "@/lib/format";
-import { confirmBankPaymentAction, rejectBankPaymentAction, updateOrderStatusAction } from "@/server/orders/actions";
+import { confirmBankPaymentAction, rejectBankPaymentAction, updateOrderNoteAction, updateOrderStatusAction } from "@/server/orders/actions";
+import { orderStatusMessage } from "@/server/orders/messages";
+import { getStoreInfoSettings } from "@/server/settings";
+import { whatsappLink } from "@/lib/phone";
+import { WhatsAppButton } from "@/components/admin/WhatsAppButton";
 import { parseCustomFieldValues } from "@/server/products/custom-fields";
 import { requireAdminPage } from "@/server/auth/session";
 
@@ -38,6 +42,14 @@ export default async function AdminOrderDetailPage({ params }: Props) {
     },
   });
   if (!order) notFound();
+  const store = await getStoreInfoSettings();
+  const customerName = order.customer?.name ?? order.shipToName;
+  const statusMessage = orderStatusMessage(
+    { number: order.number, status: order.status, customerName, grandTotal: Number(order.grandTotal), shipment: order.shipments[0] ?? null },
+    store.name,
+  );
+  const whatsappStatus = whatsappLink(order.phone, statusMessage);
+  const whatsappChat = whatsappLink(order.phone, `مرحباً ${customerName}، بخصوص طلبك رقم ${order.number} من ${store.name}:`);
 
   const meta = ORDER_STATUS[order.status as OrderStatusKey];
   const nextStatus = NEXT_STATUS[order.status as OrderStatusKey];
@@ -135,8 +147,8 @@ export default async function AdminOrderDetailPage({ params }: Props) {
         <div className="space-y-6">
           <section className="surface-card p-5">
             <h2 className="text-sm font-semibold">العميل</h2>
-            <p className="mt-3 text-sm font-medium">{order.customer?.name ?? order.shipToName}</p>
-            <p className="num mt-1 text-sm text-muted">{order.phone}</p>
+            <p className="mt-3 text-sm font-medium">{customerName}</p>
+            <p className="num mt-1 text-sm text-muted" dir="ltr">{order.phone}</p>
             {order.email && <p className="mt-0.5 text-sm text-muted">{order.email}</p>}
             {order.taxNumber && (
               <p className="num mt-0.5 text-sm text-muted">الرقم الضريبي: {order.taxNumber}</p>
@@ -145,6 +157,19 @@ export default async function AdminOrderDetailPage({ params }: Props) {
               <Link href={`/admin/customers/${order.customer.id}`} className="mt-3 inline-block text-xs font-medium text-brand-700 hover:underline">
                 عرض ملف العميل ←
               </Link>
+            )}
+            {whatsappStatus && (
+              <div className="mt-4 space-y-2 border-t pt-4">
+                <p className="text-xs font-medium text-muted">أبلغ العميل بحالة طلبه «{meta.label}» برسالة جاهزة فيها رابط طلبه:</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <WhatsAppButton href={whatsappStatus} label="إرسال تحديث الحالة" />
+                  {whatsappChat && (
+                    <a href={whatsappChat} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-brand-700 hover:underline">
+                      محادثة عادية
+                    </a>
+                  )}
+                </div>
+              </div>
             )}
           </section>
 
@@ -218,12 +243,22 @@ export default async function AdminOrderDetailPage({ params }: Props) {
             )}
           </section>
 
-          {order.internalNote && (
-            <section className="surface-card p-5">
-              <h2 className="text-sm font-semibold">ملاحظات داخلية</h2>
-              <p className="mt-3 text-sm text-muted">{order.internalNote}</p>
-            </section>
-          )}
+          <section className="surface-card p-5">
+            <h2 className="text-sm font-semibold">ملاحظات داخلية</h2>
+            <p className="mt-0.5 text-xs text-muted">للموظفين فقط — لا يراها العميل.</p>
+            <form action={updateOrderNoteAction.bind(null, order.id)} className="mt-3 space-y-2">
+              <textarea
+                name="internalNote"
+                defaultValue={order.internalNote ?? ""}
+                rows={3}
+                maxLength={2000}
+                aria-label="ملاحظات داخلية"
+                placeholder="مثال: العميل طلب تغيير لون الطباعة، التسليم بعد العصر…"
+                className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500/40"
+              />
+              <Button type="submit" size="sm" variant="secondary">حفظ الملاحظة</Button>
+            </form>
+          </section>
         </div>
       </div>
     </>

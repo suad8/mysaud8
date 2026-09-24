@@ -113,6 +113,10 @@ export type ThemeSettings = {
   /** مزايا صغيرة تحت زر الشراء بصفحة المنتج */
   productTrust: TrustItem[];
 
+  /** زر واتساب العائم في كل صفحات المتجر — رقم فارغ = إخفاء الزر */
+  whatsappFloatNumber: string;
+  whatsappFloatMessage: string;
+
   newsletterEnabled: boolean;
   newsletterTitle: string;
   newsletterText: string;
@@ -178,6 +182,9 @@ export const THEME_DEFAULTS: ThemeSettings = {
     { title: "شحن", desc: "لكل المدن" },
     { title: "الدفع", desc: "آمن 100%" },
   ],
+
+  whatsappFloatNumber: "",
+  whatsappFloatMessage: "السلام عليكم، عندي استفسار عن منتجاتكم",
 
   newsletterEnabled: true,
   newsletterTitle: "انضم لنشرتنا البريدية",

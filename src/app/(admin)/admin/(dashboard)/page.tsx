@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Topbar } from "@/components/admin/Topbar";
 import { StatCard } from "@/components/admin/StatCard";
@@ -40,7 +41,27 @@ export default async function AdminDashboard() {
       <Topbar title="نظرة عامة" subtitle="أداء المتجر خلال آخر 30 يوماً" />
 
       <div className="space-y-6 p-5 lg:p-8">
+        {/* ما يحتاج تصرّفك الآن */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            { href: "/admin/orders?status=PENDING", n: stats.pendingTransfers, label: "تحويلات بانتظار تأكيدك", tone: "bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:ring-amber-900" },
+            { href: "/admin/orders?status=PAID", n: stats.toFulfill, label: "طلبات مدفوعة تنتظر التجهيز", tone: "bg-brand-50 text-brand-800 ring-brand-200 dark:bg-brand-950/50 dark:text-brand-200 dark:ring-brand-900" },
+            { href: "/admin/abandoned-carts", n: stats.abandonedCarts, label: "سلات متروكة يمكن تذكيرها", tone: "bg-emerald-50 text-emerald-800 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-200 dark:ring-emerald-900" },
+            { href: "/admin/products?show=oos", n: null, label: "منتجات نفد مخزونها ←", tone: "bg-[var(--surface-raised)] text-[var(--text-strong)] ring-[var(--border-subtle)]" },
+          ].map((a) => (
+            <Link key={a.href} href={a.href} className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3.5 ring-1 ring-inset transition-transform hover:-translate-y-0.5 ${a.tone}`}>
+              <span className="text-sm font-semibold">{a.label}</span>
+              {a.n !== null && <span className="num text-2xl font-extrabold">{formatNumber(a.n)}</span>}
+            </Link>
+          ))}
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label={`مبيعات اليوم · ${formatNumber(stats.todayOrders)} طلب`}
+            value={`${formatNumber(Math.round(stats.todayRevenue))} ر.س`}
+            icon="M12 8v4l3 3M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+          />
           <StatCard
             label="المبيعات (30 يوم)"
             value={`${formatNumber(Math.round(stats.revenue30d))} ر.س`}
@@ -59,11 +80,6 @@ export default async function AdminDashboard() {
             label="متوسط قيمة الطلب"
             value={`${formatNumber(Math.round(stats.aov30d))} ر.س`}
             icon="M3 12h18M3 6h18M3 18h18"
-          />
-          <StatCard
-            label="بانتظار الدفع"
-            value={formatNumber(stats.pendingCount)}
-            icon="M12 8v4l3 3M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
           />
         </div>
 
@@ -97,6 +113,27 @@ export default async function AdminDashboard() {
               ))}
             </ul>
           </div>
+        </div>
+
+        <div className="surface-card p-5">
+          <h2 className="text-sm font-semibold">الأكثر مبيعاً — آخر 30 يوماً</h2>
+          {stats.topProducts.length === 0 ? (
+            <p className="mt-3 text-sm text-muted">لا توجد مبيعات مؤكدة بعد.</p>
+          ) : (
+            <ol className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              {stats.topProducts.map((p, i) => (
+                <li key={p.id || i} className="flex items-center gap-3 rounded-xl border p-3">
+                  <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-[var(--surface-sunken)]">
+                    <Image src={p.imageUrl ?? "/products/placeholder.svg"} alt="" fill sizes="44px" className="object-cover" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium">{p.nameAr}</span>
+                    <span className="num block text-xs text-muted">{formatNumber(p.quantity)} قطعة · {formatNumber(Math.round(p.revenue))} ر.س</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )}
         </div>
 
         <div className="surface-card overflow-hidden">

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/server/auth/session";
 import { logAudit } from "@/server/audit/log";
 import { saveUploadedFile, UploadError } from "@/lib/uploads";
+import { normalizePhone } from "@/lib/phone";
 import { getThemeSettings, saveThemeSettings } from "@/server/settings";
 import {
   DEFAULT_ACCENT_COLOR,
@@ -113,6 +114,8 @@ export async function updateThemeAction(_prev: ThemeFormState, formData: FormDat
   const socialLinks = parseSocialLinks(formData.get("socialLinksJson"));
 
   const headerMenu = parseHeaderMenu(formData.get("headerMenuJson"));
+  const whatsappRaw = text(formData, "whatsappFloatNumber", 30);
+  if (whatsappRaw && !normalizePhone(whatsappRaw)) return { error: "رقم واتساب غير صحيح — اكتبه مثل 05xxxxxxxx" };
 
   // أقسام الصفحة الرئيسية انتقلت لـ«تصميم الرئيسية» — نحتفظ بحقولها القديمة كما هي
   // (تُستخدم لترحيل الأقسام قبل أول حفظ من المصمّم) ونحدّث فقط ما في هذا النموذج.
@@ -126,6 +129,9 @@ export async function updateThemeAction(_prev: ThemeFormState, formData: FormDat
     headerMenu,
 
     productTrust: readPairs(formData, "productTrustTitle", "productTrustDesc"),
+
+    whatsappFloatNumber: normalizePhone(text(formData, "whatsappFloatNumber", 30)) ?? "",
+    whatsappFloatMessage: text(formData, "whatsappFloatMessage", 200),
 
     newsletterEnabled: formData.get("newsletterEnabled") === "on",
     newsletterTitle: text(formData, "newsletterTitle", 80),

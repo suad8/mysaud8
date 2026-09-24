@@ -4,6 +4,7 @@ import { startTransition, useActionState, useMemo, useState } from "react";
 import { Price } from "@/components/ui/Price";
 import { Button } from "@/components/ui/Button";
 import { createOrderAction, type CheckoutFormState } from "@/server/orders/actions";
+import { saveCheckoutPhoneAction } from "@/server/cart/actions";
 import { calculateTotals, type DiscountInput } from "@/server/cart/pricing";
 import { matchZoneForCity, type ShippingZoneWithRates } from "@/server/shipping/match";
 import type { BankTransferSettings } from "@/server/settings";
@@ -80,6 +81,8 @@ export function CheckoutForm({
       setPhoneTouched(true);
       return;
     }
+    // حفظ الجوال على السلة (للتذكير إن لم يكتمل الطلب) — لا يؤخّر الانتقال للخطوة التالية
+    saveCheckoutPhoneAction(phone).catch(() => {});
     setStep(2);
   }
 

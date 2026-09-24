@@ -20,14 +20,20 @@ export async function getOrCreateCartSessionId(): Promise<string> {
   if (existing) return existing;
 
   const id = randomUUID();
-  jar.set(CART_COOKIE, id, {
+  await setCartSessionCookie(id);
+  return id;
+}
+
+/** يربط المتصفح بسلة محددة (إنشاء سلة جديدة، أو استعادة سلة متروكة من رابط التذكير). */
+export async function setCartSessionCookie(sessionId: string): Promise<void> {
+  const jar = await cookies();
+  jar.set(CART_COOKIE, sessionId, {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
     maxAge: MAX_AGE_SECONDS,
     secure: process.env.NODE_ENV === "production",
   });
-  return id;
 }
 
 /** قراءة فقط بلا إنشاء — للاستخدام أثناء عرض الصفحات (سلة فارغة إن لم توجد بعد). */

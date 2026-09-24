@@ -1,8 +1,12 @@
 import { db } from "@/server/db";
 import { OrderStatus } from "@prisma/client";
 
-const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-const daysAgo = (n: number) => startOfDay(new Date(Date.now() - n * 86_400_000));
+/** الأيام بتوقيت السعودية (UTC+3) — «اليوم» يبدأ منتصف الليل في الرياض لا حسب ساعة الخادم. */
+const RIYADH_OFFSET = 3 * 3_600_000;
+const DAY = 86_400_000;
+const startOfDay = (d: Date) => new Date(Math.floor((d.getTime() + RIYADH_OFFSET) / DAY) * DAY - RIYADH_OFFSET);
+const daysAgo = (n: number) => startOfDay(new Date(Date.now() - n * DAY));
+const riyadhDateLabel = (d: Date) => new Date(d.getTime() + RIYADH_OFFSET).toISOString().slice(5, 10);
 
 const PAID_STATUSES = [OrderStatus.PAID, OrderStatus.PROCESSING, OrderStatus.SHIPPED, OrderStatus.DELIVERED];
 
@@ -11,7 +15,8 @@ export async function getDashboardStats() {
   const monthAgo = daysAgo(30);
   const prevMonthAgo = daysAgo(60);
 
-  const [thisMonthOrders, prevMonthOrders, todayOrders, pendingCount, lowStock, recentOrders] = await Promise.all([
+  const hourAgo = new Date(Date.now() - 3_600_000);
+  const [thisMonthOrders, prevMonthOrders, todayOrders, pendingCount, lowStock, recentOrders, todayPaid, pendingTransfers, toFulfill, abandonedCarts, topItems] = await Promise.all([
     db.order.findMany({ where: { status: { in: PAID_STATUSES }, placedAt: { gte: monthAgo } }, select: { grandTotal: true } }),
     db.order.findMany({ where: { status: { in: PAID_STATUSES }, placedAt: { gte: prevMonthAgo, lt: monthAgo } }, select: { grandTotal: true } }),
     db.order.count({ where: { placedAt: { gte: today } } }),
@@ -27,7 +32,27 @@ export async function getDashboardStats() {
       take: 6,
       include: { customer: { select: { name: true } } },
     }),
+    db.order.findMany({ where: { status: { in: PAID_STATUSES }, placedAt: { gte: today } }, select: { grandTotal: true } }),
+    // تحويلات بنكية أرفق العميل إيصالها وتنتظر تأكيدك
+    db.payment.count({ where: { method: "BANK_TRANSFER", status: "INITIATED", order: { status: OrderStatus.PENDING } } }),
+    db.order.count({ where: { status: OrderStatus.PAID } }),
+    db.cart.count({ where: { status: "ACTIVE", phone: { not: null }, items: { some: {} }, updatedAt: { gte: daysAgo(7), lt: hourAgo } } }),
+    db.orderItem.groupBy({
+      by: ["productId"],
+      where: { productId: { not: null }, order: { status: { in: PAID_STATUSES }, placedAt: { gte: monthAgo } } },
+      _sum: { quantity: true, lineTotal: true },
+      orderBy: { _sum: { quantity: "desc" } },
+      take: 5,
+    }),
   ]);
+  const topProductRows = await db.product.findMany({
+    where: { id: { in: topItems.map((t) => t.productId).filter((id): id is string => id !== null) } },
+    select: { id: true, nameAr: true, images: { select: { url: true }, orderBy: { position: "asc" }, take: 1 } },
+  });
+  const topProducts = topItems.map((t) => {
+    const p = topProductRows.find((r) => r.id === t.productId);
+    return { id: t.productId ?? "", nameAr: p?.nameAr ?? "منتج محذوف", imageUrl: p?.images[0]?.url ?? null, quantity: t._sum.quantity ?? 0, revenue: Number(t._sum.lineTotal ?? 0) };
+  });
 
   const sum = (rows: { grandTotal: unknown }[]) => rows.reduce((s, r) => s + Number(r.grandTotal), 0);
   const revenue30d = sum(thisMonthOrders);
@@ -52,7 +77,7 @@ export async function getDashboardStats() {
     const total = paidLast14
       .filter((o) => o.placedAt >= day && o.placedAt < next)
       .reduce((s, o) => s + Number(o.grandTotal), 0);
-    salesByDay.push({ date: day.toISOString().slice(5, 10), total: Math.round(total) });
+    salesByDay.push({ date: riyadhDateLabel(day), total: Math.round(total) });
   }
 
   const lowStockItems = lowStock
@@ -70,7 +95,12 @@ export async function getDashboardStats() {
     ordersDelta,
     aov30d,
     todayOrders,
+    todayRevenue: sum(todayPaid),
     pendingCount,
+    pendingTransfers,
+    toFulfill,
+    abandonedCarts,
+    topProducts,
     lowStockItems,
     salesByDay,
     recentOrders: recentOrders.map((o) => ({

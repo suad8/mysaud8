@@ -203,6 +203,14 @@ export function ThemeForm({ theme, linkOptions }: { theme: ThemeSettings; linkOp
         <HeaderMenuEditor theme={theme} saved={state.success ? state.headerMenu : undefined} linkOptions={linkOptions} />
       </Card>
 
+      {/* زر واتساب العائم */}
+      <Card title="زر واتساب العائم" desc="زر أخضر ثابت في زاوية كل صفحات المتجر يفتح محادثة معك مباشرة — اترك الرقم فارغاً لإخفائه.">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <TextField name="whatsappFloatNumber" label="رقم واتساب المتجر" defaultValue={theme.whatsappFloatNumber} placeholder="05xxxxxxxx" dir="ltr" />
+          <TextField name="whatsappFloatMessage" label="الرسالة المبدئية" defaultValue={theme.whatsappFloatMessage} />
+        </div>
+      </Card>
+
       {/* صفحة المنتج */}
       <Card title="صفحة المنتج" desc="المزايا الصغيرة التي تظهر تحت زر الإضافة للسلة (اترك العنوان فارغاً لإخفاء الميزة).">
         <PairFields items={theme.productTrust} titleName="productTrustTitle" descName="productTrustDesc" titleLabel="الميزة" />
