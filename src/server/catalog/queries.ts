@@ -9,6 +9,8 @@ const cardSelect = {
   shortDescAr: true,
   basePrice: true,
   comparePrice: true,
+  promoTitle: true,
+  promoColor: true,
   images: { select: { url: true }, orderBy: { position: "asc" }, take: 1 },
   variants: { select: { inventory: { select: { onHand: true, reserved: true } } } },
   reviews: { where: { isApproved: true }, select: { rating: true } },
@@ -36,6 +38,8 @@ function toCard(p: CardRow): ProductCardData {
     rating,
     reviewCount: ratings.length,
     available,
+    promoTitle: p.promoTitle,
+    promoColor: p.promoColor,
   };
 }
 
@@ -102,6 +106,44 @@ export async function getNewArrivals(limit = 8): Promise<ProductCardData[]> {
     take: limit,
   });
   return rows.map(toCard);
+}
+
+/** منتجات عليها تخفيض (سعر قبل الخصم) — لقسم «عروض» في تصميم الرئيسية. */
+export async function getSaleProducts(limit = 8): Promise<ProductCardData[]> {
+  const rows = await db.product.findMany({
+    where: { ...LIVE, comparePrice: { not: null } },
+    select: cardSelect,
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+  return rows.map(toCard);
+}
+
+/** أحدث منتجات تصنيف محدد (والتصنيفات الفرعية المباشرة) — لقسم منتجات من تصنيف. */
+export async function getCategoryProductCards(slug: string, limit = 8): Promise<ProductCardData[]> {
+  const category = await db.category.findFirst({
+    where: { slug, isActive: true },
+    select: { id: true, children: { select: { id: true } } },
+  });
+  if (!category) return [];
+  const rows = await db.product.findMany({
+    where: { ...LIVE, categoryId: { in: [category.id, ...category.children.map((c) => c.id)] } },
+    select: cardSelect,
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+  return rows.map(toCard);
+}
+
+/** منتجات اختارها المدير يدوياً بالترتيب نفسه — المحذوفة أو غير المنشورة تُتجاهل. */
+export async function getProductCardsByIds(ids: string[]): Promise<ProductCardData[]> {
+  if (ids.length === 0) return [];
+  const rows = await db.product.findMany({ where: { ...LIVE, id: { in: ids } }, select: { ...cardSelect, id: true } });
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  return ids.flatMap((id) => {
+    const row = byId.get(id);
+    return row ? [toCard(row)] : [];
+  });
 }
 
 export async function getProductsByCategory(

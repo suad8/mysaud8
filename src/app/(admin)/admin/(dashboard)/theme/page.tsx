@@ -1,69 +1,34 @@
+import Link from "next/link";
 import { Topbar } from "@/components/admin/Topbar";
-import { HeroBannerForm } from "@/components/admin/HeroBannerForm";
 import { ThemeForm } from "@/components/admin/ThemeForm";
-import type { LinkOptionGroup } from "@/components/admin/FooterEditor";
 import { db } from "@/server/db";
-import { getHeroContent, getHomepageSections, getThemeSettings } from "@/server/settings";
+import { getThemeSettings } from "@/server/settings";
+import { getLinkOptions } from "@/server/settings/link-options";
 import { deleteSubscriberAction } from "@/server/newsletter/actions";
 import { formatDate, formatNumber } from "@/lib/format";
 import { requireAdminPage } from "@/server/auth/session";
 
 export default async function AdminThemePage() {
   await requireAdminPage();
-  const [hero, theme, visibility, products, subscribers, pages, categories] = await Promise.all([
-    getHeroContent(),
+  const [theme, subscribers, linkOptions] = await Promise.all([
     getThemeSettings(),
-    getHomepageSections(),
-    db.product
-      .findMany({
-        where: { status: "ACTIVE", deletedAt: null },
-        select: { id: true, slug: true, nameAr: true, isFeatured: true, basePrice: true, images: { select: { url: true }, orderBy: { position: "asc" }, take: 1 } },
-        orderBy: { nameAr: "asc" },
-      })
-      .then((rows) =>
-        rows.map(({ images, basePrice, ...p }) => ({ ...p, imageUrl: images[0]?.url ?? null, price: Number(basePrice) })),
-      ),
     db.newsletterSubscriber.findMany({ orderBy: { createdAt: "desc" } }),
-    db.page.findMany({ select: { slug: true, title: true, isPublished: true }, orderBy: { title: "asc" } }),
-    db.category.findMany({ where: { isActive: true }, select: { slug: true, nameAr: true }, orderBy: { position: "asc" } }),
+    getLinkOptions({ withProducts: true }),
   ]);
-
-  // وجهات جاهزة لروابط الفوتر — صفحات المتجر الأساسية + صفحاتك + التصنيفات
-  const linkOptions: LinkOptionGroup[] = [
-    {
-      group: "صفحات المتجر",
-      options: [
-        { label: "الرئيسية", href: "/" },
-        { label: "كل المنتجات", href: "/products" },
-        { label: "البحث", href: "/search" },
-        { label: "السلة", href: "/cart" },
-      ],
-    },
-    {
-      group: "صفحاتك (من «الصفحات»)",
-      options: pages.map((p) => ({ label: p.title, href: `/pages/${p.slug}`, note: p.isPublished ? undefined : "غير منشورة" })),
-    },
-    { group: "التصنيفات", options: categories.map((c) => ({ label: c.nameAr, href: `/c/${c.slug}` })) },
-  ].filter((g) => g.options.length > 0);
 
   return (
     <>
-      <Topbar title="الثيم" subtitle="تحكّم كامل بتصميم المتجر ومحتواه" />
+      <Topbar title="الثيم" subtitle="ألوان المتجر، القائمة العلوية، صفحة المنتج، والفوتر" />
       <div className="space-y-5 p-5 pb-28 lg:p-8 lg:pb-28">
-        <details open className="surface-card group p-5">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold">البانر الرئيسي</h2>
-              <p className="mt-0.5 text-xs text-muted">الصورة، العناوين، الأزرار، البطاقة العائمة، والإحصائيات — له زر حفظ مستقل.</p>
-            </div>
-            <span className="text-muted transition-transform group-open:rotate-180">▾</span>
-          </summary>
-          <div className="mt-4">
-            <HeroBannerForm hero={hero} products={products.map((p) => ({ slug: p.slug, nameAr: p.nameAr }))} />
+        <Link href="/admin/homepage" className="surface-card flex items-center justify-between gap-4 p-5 transition-colors hover:border-brand-300">
+          <div>
+            <h2 className="text-sm font-semibold">أقسام الصفحة الرئيسية انتقلت إلى «تصميم الرئيسية» ←</h2>
+            <p className="mt-0.5 text-xs text-muted">البانر، السلايدر، المنتجات البارزة، البنرات، الفيديو… أضف واحذف ورتّب أي قسم.</p>
           </div>
-        </details>
+          <span className="shrink-0 rounded-full bg-brand-700 px-4 py-2 text-xs font-semibold text-white">فتح المصمّم</span>
+        </Link>
 
-        <ThemeForm theme={theme} visibility={visibility} products={products} linkOptions={linkOptions} />
+        <ThemeForm theme={theme} linkOptions={linkOptions} />
 
         <section className="surface-card p-5">
           <h2 className="text-sm font-semibold">مشتركو النشرة البريدية ({formatNumber(subscribers.length)})</h2>

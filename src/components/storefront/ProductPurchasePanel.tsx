@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { addToCartAction } from "@/server/cart/actions";
 import type { CustomFieldDef } from "@/server/products/custom-fields";
+import type { OptionGroup } from "@/lib/product-options";
 
 export type PurchaseVariant = {
   id: string;
@@ -13,17 +14,21 @@ export type PurchaseVariant = {
   price: number;
   comparePrice: number | null;
   available: number;
+  options?: Record<string, string>;
 };
 
 export function ProductPurchasePanel({
   variants,
   customFields,
+  optionGroups = [],
 }: {
   variants: PurchaseVariant[];
   customFields: CustomFieldDef[];
+  optionGroups?: OptionGroup[];
 }) {
   const [state, formAction, isPending] = useActionState(addToCartAction, {});
-  const [selectedId, setSelectedId] = useState(variants[0]?.id ?? "");
+  // البداية بأول خيار متوفر بدل أول خيار مطلقاً
+  const [selectedId, setSelectedId] = useState((variants.find((v) => v.available > 0) ?? variants[0])?.id ?? "");
   const [quantity, setQuantity] = useState(1);
   const [textValues, setTextValues] = useState<Record<string, string>>({});
   const [fileNames, setFileNames] = useState<Record<string, string | null>>({});
@@ -52,6 +57,31 @@ export function ProductPurchasePanel({
 
   const selected = useMemo(() => variants.find((v) => v.id === selectedId) ?? variants[0], [variants, selectedId]);
   const hasVariants = variants.length > 1;
+  // مجموعات الخيارات (مثل سلة): تُستخدم فقط إن كان لكل متغيّر قيمة في كل مجموعة
+  const groups = useMemo(
+    () => optionGroups.filter((g) => g.values.length > 0 && variants.every((v) => v.options?.[g.name] !== undefined)),
+    [optionGroups, variants],
+  );
+  const grouped = groups.length > 0 && hasVariants;
+
+  /** اختيار قيمة في مجموعة: التركيبة المطابقة إن وُجدت ومتوفرة، وإلا أقرب تركيبة متوفرة بهذه القيمة. */
+  function selectValue(group: string, value: string) {
+    const wanted = { ...(selected?.options ?? {}), [group]: value };
+    const exact = variants.find((v) => groups.every((g) => v.options?.[g.name] === wanted[g.name]));
+    const withValue = variants.filter((v) => v.options?.[group] === value);
+    const fallback = withValue.find((v) => v.available > 0) ?? withValue[0];
+    const target = exact && (exact.available > 0 || !fallback || fallback.available <= 0) ? exact : fallback;
+    if (target) selectVariant(target.id);
+  }
+
+  function valueState(group: string, value: string) {
+    const withValue = variants.filter((v) => v.options?.[group] === value);
+    const compatible = withValue.filter((v) => groups.every((g) => g.name === group || v.options?.[g.name] === selected?.options?.[g.name]));
+    return {
+      disabled: withValue.every((v) => v.available <= 0),
+      soldOutHere: compatible.length > 0 && compatible.every((v) => v.available <= 0),
+    };
+  }
   const outOfStock = !selected || selected.available <= 0;
 
   function selectVariant(id: string) {
@@ -74,7 +104,39 @@ export function ProductPurchasePanel({
         <p className="mt-1 text-xs text-muted">شامل ضريبة القيمة المضافة</p>
       </div>
 
-      {hasVariants && (
+      {grouped &&
+        groups.map((g) => (
+          <div key={g.name} className="mt-6">
+            <h2 className="text-sm font-semibold">
+              {g.name}: <span className="font-normal text-muted">{selected?.options?.[g.name]}</span>
+            </h2>
+            <div className="mt-2.5 flex flex-wrap gap-2" role="radiogroup" aria-label={g.name}>
+              {g.values.map((value) => {
+                const active = selected?.options?.[g.name] === value;
+                const { disabled, soldOutHere } = valueState(g.name, value);
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    disabled={disabled}
+                    onClick={() => selectValue(g.name, value)}
+                    className={`rounded-xl border px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                      active
+                        ? "border-brand-600 bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300"
+                        : "hover:bg-ink-100 dark:hover:bg-ink-800"
+                    } ${soldOutHere && !active ? "line-through decoration-ink-400" : ""}`}
+                  >
+                    {value}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+
+      {hasVariants && !grouped && (
         <div className="mt-6">
           <h2 className="text-sm font-semibold">الخيار</h2>
           <div className="mt-2.5 flex flex-wrap gap-2">

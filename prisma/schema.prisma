@@ -76,6 +76,13 @@ model Product {
   /// — مصفوفة { id, label, type: TEXT|TEXTAREA|FILE, required }
   customFields Json @default("[]")
 
+  /// العنوان الترويجي على صورة المنتج (مثل "شحن مجاني") — حتى 25 حرفاً
+  promoTitle  String?
+  /// لون شارة العنوان الترويجي: brand | accent | red | green | dark
+  promoColor  String?
+  /// مجموعات الخيارات: [{ "name": "المقاس", "values": ["8 أونص", "9 أونص"] }] — كل متغيّر يحمل قيمة من كل مجموعة
+  optionGroups Json @default("[]")
+
   images      ProductImage[]
   variants    ProductVariant[]
   reviews     Review[]

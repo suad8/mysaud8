@@ -34,6 +34,8 @@ const securityHeaders = [
       "img-src 'self' data: blob: https://www.google-analytics.com https://www.googletagmanager.com",
       "font-src 'self' data:",
       "connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://*.google-analytics.com https://www.googletagmanager.com",
+      // فيديو يوتيوب في «تصميم الرئيسية» — النطاق المخصّص للخصوصية فقط (بلا كوكيز تتبّع)
+      "frame-src https://www.youtube-nocookie.com",
       "frame-ancestors 'none'",
       "object-src 'none'",
       "base-uri 'self'",

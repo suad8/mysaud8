@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Price } from "@/components/ui/Price";
 import { Badge } from "@/components/ui/Badge";
 import { Rating } from "@/components/ui/Rating";
+import { promoClass } from "@/lib/promo";
 
 export type ProductCardData = {
   slug: string;
@@ -15,6 +16,9 @@ export type ProductCardData = {
   reviewCount: number;
   /** الكمية المتاحة عبر كل المتغيّرات — تحدّد شارة التوفر */
   available: number;
+  /** العنوان الترويجي على الصورة (مثل "شحن مجاني") */
+  promoTitle?: string | null;
+  promoColor?: string | null;
 };
 
 export function ProductCard({ product }: { product: ProductCardData }) {
@@ -34,6 +38,11 @@ export function ProductCard({ product }: { product: ProductCardData }) {
           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
           className="object-cover transition-transform duration-500 group-hover:scale-105"
         />
+        {product.promoTitle && (
+          <span className={`absolute top-3 end-3 max-w-[70%] truncate rounded-full px-2.5 py-1 text-[11px] font-bold shadow-sm ${promoClass(product.promoColor)}`}>
+            {product.promoTitle}
+          </span>
+        )}
         <div className="absolute top-3 start-3 flex flex-col gap-1.5">
           {soldOut && <Badge tone="gray">نفد المخزون</Badge>}
           {lowStock && <Badge tone="amber">بقي {product.available}</Badge>}

@@ -130,7 +130,8 @@ export async function createOrderFromCheckout(input: CreateOrderInput) {
               create: lines.map((l) => ({
                 productId: l.productId,
                 variantId: l.variantId,
-                nameAr: l.nameAr,
+                // اسم المنتج مع الخيار المختار — يظهر للمتجر في الطلب والفاتورة (مثل: كوب — 9 أونص · 500)
+                nameAr: l.optionsLabel ? `${l.nameAr} — ${l.optionsLabel}` : l.nameAr,
                 sku: l.sku,
                 imageUrl: l.imageUrl,
                 options: l.customValues,

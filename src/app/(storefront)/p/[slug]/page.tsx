@@ -12,6 +12,8 @@ import { parseCustomFieldDefs } from "@/server/products/custom-fields";
 import { decodeSlug } from "@/lib/route-params";
 import { formatDate } from "@/lib/format";
 import { toJsonLd } from "@/lib/json-ld";
+import { promoClass } from "@/lib/promo";
+import { sanitizeOptionGroups } from "@/lib/product-options";
 import { CURRENCY, SITE_URL } from "@/lib/constants";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -105,6 +107,11 @@ export default async function ProductPage({ params }: Props) {
         <div>
           <div className="surface-card relative aspect-square overflow-hidden">
             <Image src={product.images[0]?.url ?? "/products/placeholder.svg"} alt={product.nameAr} fill sizes="50vw" className="object-cover" priority />
+            {product.promoTitle && (
+              <span className={`absolute top-4 end-4 rounded-full px-3 py-1.5 text-xs font-bold shadow-sm ${promoClass(product.promoColor)}`}>
+                {product.promoTitle}
+              </span>
+            )}
           </div>
           {product.images.length > 1 && (
             <div className="mt-3 grid grid-cols-5 gap-3">
@@ -134,7 +141,9 @@ export default async function ProductPage({ params }: Props) {
                 price: v.price,
                 comparePrice: v.comparePrice,
                 available: v.available,
+                options: v.options,
               }))}
+              optionGroups={sanitizeOptionGroups(product.optionGroups)}
               customFields={parseCustomFieldDefs(product.customFields)}
             />
           </div>

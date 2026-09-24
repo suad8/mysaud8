@@ -15,6 +15,7 @@ import {
 } from "@/server/products/actions";
 import { PRODUCT_STATUS } from "@/lib/constants";
 import { parseCustomFieldDefs } from "@/server/products/custom-fields";
+import { sanitizeOptionGroups } from "@/lib/product-options";
 import { requireAdminPage } from "@/server/auth/session";
 
 type Props = { params: Promise<{ id: string }> };
@@ -25,7 +26,7 @@ export default async function EditProductPage({ params }: Props) {
   const [product, categories] = await Promise.all([
     db.product.findUnique({
       where: { id, deletedAt: null },
-      include: { images: { orderBy: { position: "asc" } }, variants: { include: { inventory: true } } },
+      include: { images: { orderBy: { position: "asc" } }, variants: { where: { isActive: true }, include: { inventory: true } } },
     }),
     db.category.findMany({ where: { isActive: true }, orderBy: { position: "asc" }, select: { id: true, nameAr: true } }),
   ]);
@@ -38,6 +39,8 @@ export default async function EditProductPage({ params }: Props) {
     categoryId: product.categoryId ?? "",
     status: product.status,
     isFeatured: product.isFeatured,
+    promoTitle: product.promoTitle ?? "",
+    promoColor: product.promoColor ?? "brand",
     basePrice: product.basePrice.toString(),
     comparePrice: product.comparePrice?.toString() ?? "",
     costPrice: product.costPrice?.toString() ?? "",
@@ -48,7 +51,9 @@ export default async function EditProductPage({ params }: Props) {
       sku: v.sku,
       price: v.price.toString(),
       stock: v.inventory?.onHand ?? 0,
+      options: (v.options && typeof v.options === "object" && !Array.isArray(v.options) ? v.options : {}) as Record<string, string>,
     })),
+    optionGroups: sanitizeOptionGroups(product.optionGroups),
     customFields: parseCustomFieldDefs(product.customFields),
   };
 

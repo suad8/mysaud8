@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/Button";
 import type { ProductFormState } from "@/server/products/actions";
 import type { CustomFieldDef, CustomFieldType } from "@/server/products/custom-fields";
 import { AiImageGenerator } from "@/components/admin/AiImageGenerator";
+import { OptionsEditor } from "@/components/admin/OptionsEditor";
+import type { OptionGroup, OptionSelection } from "@/lib/product-options";
+import { PROMO_COLORS, PROMO_TITLE_MAX, promoClass } from "@/lib/promo";
 
 type Category = { id: string; nameAr: string };
 
@@ -15,6 +18,7 @@ type VariantRow = {
   sku: string;
   price: string;
   stock: number;
+  options: OptionSelection;
 };
 
 type ExistingImage = { id: string; url: string; alt: string | null };
@@ -26,11 +30,14 @@ export type ProductFormInitial = {
   categoryId: string;
   status: "DRAFT" | "ACTIVE" | "ARCHIVED";
   isFeatured: boolean;
+  promoTitle: string;
+  promoColor: string;
   basePrice: string;
   comparePrice: string;
   costPrice: string;
   images: ExistingImage[];
   variants: VariantRow[];
+  optionGroups: OptionGroup[];
   customFields: CustomFieldDef[];
 };
 
@@ -41,24 +48,20 @@ const EMPTY: ProductFormInitial = {
   categoryId: "",
   status: "DRAFT",
   isFeatured: false,
+  promoTitle: "",
+  promoColor: "brand",
   basePrice: "",
   comparePrice: "",
   costPrice: "",
   images: [],
   variants: [],
+  optionGroups: [],
   customFields: [],
 };
 
 type Action = (state: ProductFormState, formData: FormData) => Promise<ProductFormState>;
 
-type EditableVariant = { key: string; id: string | null; nameAr: string; price: string; stock: string };
 type EditableCustomField = { key: string; id: string; label: string; type: CustomFieldType; required: boolean };
-
-let rowCounter = 0;
-function newRowKey() {
-  rowCounter += 1;
-  return `new-${rowCounter}`;
-}
 
 let fieldCounter = 0;
 function newFieldId() {
@@ -85,6 +88,8 @@ export function ProductForm({
   const [imageName, setImageName] = useState<string | null>(null);
   const [clientError, setClientError] = useState<string | null>(null);
   const [removedImageIds, setRemovedImageIds] = useState<string[]>([]);
+  const [promoTitle, setPromoTitle] = useState(data.promoTitle);
+  const [promoColor, setPromoColor] = useState(data.promoColor || "brand");
   const topRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -94,37 +99,8 @@ export function ProductForm({
     if (hasErrors) topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [state, clientError, hasErrors]);
 
-  const [multiOption, setMultiOption] = useState(data.variants.length > 1);
-  const [rows, setRows] = useState<EditableVariant[]>(() =>
-    data.variants.length > 0
-      ? data.variants.map((v) => ({ key: v.id, id: v.id, nameAr: v.nameAr === "الافتراضي" ? "" : v.nameAr, price: v.price, stock: String(v.stock) }))
-      : [{ key: newRowKey(), id: null, nameAr: "", price: data.basePrice, stock: "0" }],
-  );
-  const [removedIds, setRemovedIds] = useState<string[]>([]);
+  const [multiOption, setMultiOption] = useState(data.variants.length > 1 || data.optionGroups.length > 0);
 
-  function addRow() {
-    setRows((r) => [...r, { key: newRowKey(), id: null, nameAr: "", price: "", stock: "0" }]);
-  }
-
-  function removeRow(key: string) {
-    setRows((r) => {
-      if (r.length <= 1) return r;
-      const row = r.find((x) => x.key === key);
-      if (row?.id) setRemovedIds((ids) => [...ids, row.id!]);
-      return r.filter((x) => x.key !== key);
-    });
-  }
-
-  function updateRow(key: string, field: "nameAr" | "price" | "stock", value: string) {
-    setRows((r) => r.map((row) => (row.key === key ? { ...row, [field]: value } : row)));
-  }
-
-  function toggleMultiOption(checked: boolean) {
-    setMultiOption(checked);
-    if (checked && rows.length === 1 && !rows[0].nameAr) {
-      updateRow(rows[0].key, "nameAr", "الخيار الأول");
-    }
-  }
 
   const [customFields, setCustomFields] = useState<EditableCustomField[]>(() =>
     data.customFields.map((f) => ({ key: f.id, id: f.id, label: f.label, type: f.type, required: f.required })),
@@ -236,66 +212,13 @@ export function ProductForm({
               و"المخزون" بالعمود الجانبي مباشرة. عند تفعيل "عدة خيارات" يظهر
               جدول قابل للإضافة والحذف — مناسب لمنتجات بمقاسات/أنواع متعددة
               (مثلاً: مقاسات ورق وأنواع طباعة مختلفة). */}
-          <section className="surface-card p-5">
-            <label className="flex items-center gap-2.5 text-sm font-medium">
-              <input
-                type="checkbox"
-                checked={multiOption}
-                onChange={(e) => toggleMultiOption(e.target.checked)}
-                className="h-4 w-4 accent-brand-600"
-              />
-              هذا المنتج له أكثر من خيار (مقاس، نوع، لون...)
-            </label>
-            <input type="hidden" name="multiOption" value={multiOption ? "on" : ""} />
-
-            {multiOption && (
-              <div className="mt-4 space-y-3">
-                {removedIds.map((id) => (
-                  <input key={id} type="hidden" name="removeVariantId" value={id} />
-                ))}
-                {rows.map((row) => (
-                  <div key={row.key} className="flex items-center gap-2.5">
-                    <input type="hidden" name="variantId" value={row.id ?? ""} />
-                    <input
-                      name="variantName"
-                      value={row.nameAr}
-                      onChange={(e) => updateRow(row.key, "nameAr", e.target.value)}
-                      placeholder="اسم الخيار (مثال: A4 - ورق لامع)"
-                      className="h-10 flex-1 rounded-lg border bg-transparent px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500/40"
-                    />
-                    <input
-                      name="variantPrice"
-                      value={row.price}
-                      onChange={(e) => updateRow(row.key, "price", e.target.value)}
-                      inputMode="decimal"
-                      placeholder="السعر"
-                      className="num h-10 w-24 rounded-lg border bg-transparent px-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-500/40"
-                    />
-                    <input
-                      name="variantStock"
-                      value={row.stock}
-                      onChange={(e) => updateRow(row.key, "stock", e.target.value)}
-                      inputMode="numeric"
-                      placeholder="المخزون"
-                      className="num h-10 w-20 rounded-lg border bg-transparent px-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-500/40"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeRow(row.key)}
-                      disabled={rows.length <= 1}
-                      className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-muted hover:bg-red-50 hover:text-red-600 disabled:opacity-30 dark:hover:bg-red-950"
-                      aria-label="إزالة الخيار"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-                <button type="button" onClick={addRow} className="text-xs font-medium text-brand-700 hover:underline">
-                  + إضافة خيار آخر
-                </button>
-              </div>
-            )}
-          </section>
+          <OptionsEditor
+            enabled={multiOption}
+            onEnabledChange={setMultiOption}
+            initialGroups={data.optionGroups}
+            initialVariants={data.variants.map((v) => ({ id: v.id, nameAr: v.nameAr, options: v.options, price: v.price, stock: v.stock }))}
+            getBasePrice={() => formRef.current?.querySelector<HTMLInputElement>('input[name="basePrice"]')?.value ?? ""}
+          />
 
           {/* حقول مخصّصة يملؤها العميل عند الشراء — نص أو رفع ملف/صورة (مثل
               "أرفق تصميمك" لطلبات الطباعة المخصّصة). تختلف عن "الخيارات" أعلاه:
@@ -367,8 +290,42 @@ export function ProductForm({
             </select>
             <label className="mt-3 flex items-center gap-2.5 text-sm">
               <input type="checkbox" name="isFeatured" defaultChecked={data.isFeatured} className="h-4 w-4 accent-brand-600" />
-              منتج مميّز (يظهر في الرئيسية)
+              ⭐ منتج بارز (يظهر في قسم المنتجات البارزة)
             </label>
+          </section>
+
+          {/* العنوان الترويجي: شارة على صورة المنتج (مثل سلة) — حتى 25 حرفاً */}
+          <section className="surface-card p-5">
+            <h2 className="text-sm font-semibold">العنوان الترويجي</h2>
+            <p className="mt-1 text-[11px] text-muted">يظهر على صورة المنتج لجذب الانتباه — مثل «شحن مجاني» أو «الأكثر طلباً».</p>
+            <input
+              name="promoTitle"
+              value={promoTitle}
+              onChange={(e) => setPromoTitle(e.target.value.slice(0, PROMO_TITLE_MAX))}
+              maxLength={PROMO_TITLE_MAX}
+              placeholder="مثال: خصم 20%"
+              className="mt-3 h-10 w-full rounded-lg border bg-transparent px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500/40"
+            />
+            <p className="mt-1 text-end text-[11px] text-muted num">{promoTitle.length}/{PROMO_TITLE_MAX}</p>
+            <input type="hidden" name="promoColor" value={promoColor} />
+            <div className="mt-2 flex flex-wrap gap-2">
+              {(Object.keys(PROMO_COLORS) as (keyof typeof PROMO_COLORS)[]).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setPromoColor(c)}
+                  aria-pressed={promoColor === c}
+                  className={`rounded-full px-3 py-1 text-[11px] font-bold ${PROMO_COLORS[c].className} ${promoColor === c ? "ring-2 ring-offset-2 ring-brand-500" : "opacity-70"}`}
+                >
+                  {PROMO_COLORS[c].label}
+                </button>
+              ))}
+            </div>
+            {promoTitle && (
+              <p className="mt-3 text-[11px] text-muted">
+                المعاينة: <span className={`ms-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${promoClass(promoColor)}`}>{promoTitle}</span>
+              </p>
+            )}
           </section>
 
           <section className="surface-card p-5">

@@ -9,6 +9,16 @@ import { logAudit } from "@/server/audit/log";
 import { ProductStatus } from "@prisma/client";
 import type { CustomFieldDef, CustomFieldType } from "@/server/products/custom-fields";
 import { slugify, uniqueSlug } from "@/lib/slug";
+import { PROMO_COLORS, PROMO_TITLE_MAX } from "@/lib/promo";
+import {
+  MAX_COMBINATIONS,
+  isValidSelection,
+  optionKey,
+  optionLabel,
+  sanitizeOptionGroups,
+  type OptionGroup,
+  type OptionSelection,
+} from "@/lib/product-options";
 
 export type ProductFormState = {
   error?: string;
@@ -21,26 +31,46 @@ const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 const productSlugExists = async (slug: string) => Boolean(await db.product.findUnique({ where: { slug }, select: { id: true } }));
 
-type VariantInput = { id: string | null; nameAr: string; price: number; stock: number };
+type VariantInput = { id: string | null; nameAr: string; options: OptionSelection; price: number; stock: number };
 
-/** يقرأ صفوف الخيارات المتعددة من الحقول المتكررة الاسم (formData.getAll) ويتحقق من صحتها. */
-function parseVariantRows(formData: FormData): { error: string } | { rows: VariantInput[] } {
+/** مجموعات الخيارات المرسلة من محرّر الخيارات (JSON في حقل مخفي). */
+function parseOptionGroups(formData: FormData): OptionGroup[] {
+  try {
+    return sanitizeOptionGroups(JSON.parse(String(formData.get("optionGroups") ?? "[]")));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * يقرأ صفوف التركيبات من الحقول المتكررة الاسم (formData.getAll) ويتحقق منها:
+ * كل صف يحمل قيمة صالحة من كل مجموعة، بلا تكرار، وسعر ومخزون صالحان.
+ * اسم المتغيّر يُبنى على الخادم من القيم (لا يُوثَق بالاسم المرسل).
+ */
+function parseVariantRows(formData: FormData, groups: OptionGroup[]): { error: string } | { rows: VariantInput[] } {
+  if (groups.length === 0) return { error: "أضف مجموعة خيارات واحدة على الأقل (مثل: المقاس) مع قيمها" };
   const ids = formData.getAll("variantId").map((v) => String(v));
-  const names = formData.getAll("variantName").map((v) => String(v).trim());
+  const optionsRaw = formData.getAll("variantOptions").map((v) => String(v));
   const prices = formData.getAll("variantPrice").map((v) => String(v).trim());
   const stocks = formData.getAll("variantStock").map((v) => String(v).trim());
 
-  if (names.length === 0) return { error: "أضف خياراً واحداً على الأقل للمنتج" };
+  if (optionsRaw.length === 0) return { error: "أضف قيمة واحدة على الأقل لكل مجموعة خيارات" };
+  if (optionsRaw.length > MAX_COMBINATIONS) return { error: `عدد التركيبات أكبر من الحد (${MAX_COMBINATIONS}) — قلّل القيم` };
 
   const rows: VariantInput[] = [];
-  const seenNames = new Set<string>();
-  for (let i = 0; i < names.length; i++) {
-    const nameAr = names[i];
-    if (!nameAr) return { error: "اسم كل خيار مطلوب" };
-
-    const normalized = nameAr.toLowerCase();
-    if (seenNames.has(normalized)) return { error: `يوجد خيار مكرر بالاسم "${nameAr}"` };
-    seenNames.add(normalized);
+  const seen = new Set<string>();
+  for (let i = 0; i < optionsRaw.length; i++) {
+    let options: unknown;
+    try {
+      options = JSON.parse(optionsRaw[i]!);
+    } catch {
+      return { error: "بيانات الخيارات غير صالحة — أعد تحميل الصفحة" };
+    }
+    if (!isValidSelection(groups, options)) return { error: "بيانات الخيارات غير صالحة — أعد تحميل الصفحة" };
+    const key = optionKey(groups, options);
+    if (seen.has(key)) return { error: "توجد تركيبة خيارات مكررة" };
+    seen.add(key);
+    const nameAr = optionLabel(groups, options);
 
     const price = Number(prices[i]);
     if (!prices[i] || Number.isNaN(price) || price <= 0) {
@@ -52,7 +82,7 @@ function parseVariantRows(formData: FormData): { error: string } | { rows: Varia
       return { error: `مخزون الخيار "${nameAr}" غير صالح` };
     }
 
-    rows.push({ id: ids[i] || null, nameAr, price: round2(price), stock });
+    rows.push({ id: ids[i] || null, nameAr, options, price: round2(price), stock });
   }
   return { rows };
 }
@@ -118,13 +148,21 @@ function parseProductFields(formData: FormData) {
   const stock = stockRaw ? Math.round(Number(stockRaw)) : 0;
   if (stockRaw && (Number.isNaN(stock) || stock < 0)) fieldErrors.stock = "الكمية يجب أن تكون رقماً صحيحاً موجباً";
 
+  const statusRaw = String(formData.get("status") ?? "DRAFT");
+  const status: ProductStatus = statusRaw === "ACTIVE" || statusRaw === "ARCHIVED" ? statusRaw : "DRAFT";
+  const promoTitle = String(formData.get("promoTitle") ?? "").trim().slice(0, PROMO_TITLE_MAX) || null;
+  const promoColorRaw = String(formData.get("promoColor") ?? "");
+  const promoColor = promoColorRaw in PROMO_COLORS ? promoColorRaw : "brand";
+
   return {
     fieldErrors,
     nameAr,
+    promoTitle,
+    promoColor: promoTitle ? promoColor : null,
     shortDescAr: String(formData.get("shortDescAr") ?? "").trim() || null,
     descAr: String(formData.get("descAr") ?? "").trim() || null,
     categoryId: String(formData.get("categoryId") ?? "").trim() || null,
-    status: String(formData.get("status") ?? "DRAFT") as ProductStatus,
+    status,
     isFeatured: formData.get("isFeatured") === "on",
     basePrice: round2(basePrice),
     comparePrice: comparePrice != null ? round2(comparePrice) : null,
@@ -143,9 +181,10 @@ export async function createProductAction(
   if (Object.keys(parsed.fieldErrors).length > 0) return { fieldErrors: parsed.fieldErrors };
 
   const multiOption = formData.get("multiOption") === "on";
+  const optionGroups = multiOption ? parseOptionGroups(formData) : [];
   let variantRows: VariantInput[] = [];
   if (multiOption) {
-    const result = parseVariantRows(formData);
+    const result = parseVariantRows(formData, optionGroups);
     if ("error" in result) return { error: result.error };
     variantRows = result.rows;
   }
@@ -172,7 +211,7 @@ export async function createProductAction(
     ? variantRows.map((row, i) => ({
         sku: variantSku(skuBase, i),
         nameAr: row.nameAr,
-        options: {},
+        options: row.options,
         price: row.price,
         comparePrice: parsed.comparePrice,
         inventory: { create: { onHand: row.stock, reserved: 0, lowStockAt: 5 } },
@@ -199,12 +238,15 @@ export async function createProductAction(
         categoryId: parsed.categoryId,
         status: parsed.status,
         isFeatured: parsed.isFeatured,
+        promoTitle: parsed.promoTitle,
+        promoColor: parsed.promoColor,
         basePrice: parsed.basePrice,
         comparePrice: parsed.comparePrice,
         costPrice: parsed.costPrice,
         metaTitle: parsed.nameAr,
         metaDesc: parsed.shortDescAr,
         customFields,
+        optionGroups,
         images: {
           create: [aiImageUrl, imageUrl]
             .filter((url): url is string => Boolean(url))
@@ -244,10 +286,11 @@ export async function updateProductAction(
   if (Object.keys(parsed.fieldErrors).length > 0) return { fieldErrors: parsed.fieldErrors };
 
   const multiOption = formData.get("multiOption") === "on";
+  const optionGroups = multiOption ? parseOptionGroups(formData) : [];
   let variantRows: VariantInput[] = [];
   const removeIds = formData.getAll("removeVariantId").map((v) => String(v)).filter(Boolean);
   if (multiOption) {
-    const result = parseVariantRows(formData);
+    const result = parseVariantRows(formData, optionGroups);
     if ("error" in result) return { error: result.error };
     variantRows = result.rows;
   }
@@ -280,10 +323,13 @@ export async function updateProductAction(
           categoryId: parsed.categoryId,
           status: parsed.status,
           isFeatured: parsed.isFeatured,
+          promoTitle: parsed.promoTitle,
+          promoColor: parsed.promoColor,
           basePrice: parsed.basePrice,
           comparePrice: parsed.comparePrice,
           costPrice: parsed.costPrice,
           customFields,
+          ...(multiOption ? { optionGroups } : {}),
         },
       });
 
@@ -313,7 +359,14 @@ export async function updateProductAction(
         if (finalRemoveIds.length > 0) {
           // سلال العملاء تشير لهذه الخيارات بقيد FK إلزامي؛ يجب تفريغها أولاً
           await tx.cartItem.deleteMany({ where: { variantId: { in: finalRemoveIds } } });
-          await tx.productVariant.deleteMany({ where: { id: { in: finalRemoveIds }, productId } });
+          // خيار سبق طلبه يُخفى بدل حذفه — فواتير الطلبات القديمة تبقى سليمة
+          const ordered = new Set(
+            (await tx.orderItem.findMany({ where: { variantId: { in: finalRemoveIds } }, select: { variantId: true }, distinct: ["variantId"] }))
+              .map((o) => o.variantId)
+              .filter((id): id is string => Boolean(id)),
+          );
+          await tx.productVariant.updateMany({ where: { id: { in: [...ordered] }, productId }, data: { isActive: false } });
+          await tx.productVariant.deleteMany({ where: { id: { in: finalRemoveIds.filter((id) => !ordered.has(id)) }, productId } });
         }
 
         const skuBase = productId.toUpperCase().slice(0, 10);
@@ -321,8 +374,8 @@ export async function updateProductAction(
         for (const row of variantRows) {
           if (row.id) {
             await tx.productVariant.update({
-              where: { id: row.id },
-              data: { nameAr: row.nameAr, price: row.price, comparePrice: parsed.comparePrice },
+              where: { id: row.id, productId },
+              data: { nameAr: row.nameAr, options: row.options, price: row.price, comparePrice: parsed.comparePrice, isActive: true },
             });
             await tx.inventoryItem.update({ where: { variantId: row.id }, data: { onHand: row.stock } });
           } else {
@@ -331,7 +384,7 @@ export async function updateProductAction(
                 productId,
                 sku: variantSku(skuBase, newIndex),
                 nameAr: row.nameAr,
-                options: {},
+                options: row.options,
                 price: row.price,
                 comparePrice: parsed.comparePrice,
                 inventory: { create: { onHand: row.stock, reserved: 0, lowStockAt: 5 } },
@@ -344,7 +397,7 @@ export async function updateProductAction(
         // منتج بمتغيّر واحد: سعره ومخزونه هما نفس حقلي "التسعير"/"المخزون" بالنموذج مباشرة.
         // إن كان للمنتج عدّة متغيّرات وتم إلغاء تفعيل "خيارات متعددة" دون تعديلها،
         // نتركها كما هي تفادياً لحذف بيانات دون طلب صريح من المدير.
-        const variants = await tx.productVariant.findMany({ where: { productId }, select: { id: true } });
+        const variants = await tx.productVariant.findMany({ where: { productId, isActive: true }, select: { id: true } });
         if (variants.length === 1) {
           await tx.productVariant.update({
             where: { id: variants[0].id },
@@ -396,4 +449,76 @@ export async function softDeleteProductAction(productId: string, _formData: Form
   revalidatePath("/admin/products");
   revalidatePath("/");
   redirect("/admin/products");
+}
+
+/** ⭐ تمييز/إلغاء تمييز منتج كبارز بضغطة من قائمة المنتجات. */
+export async function toggleProductFeaturedAction(productId: string, _formData: FormData) {
+  const session = await requireAdmin();
+  const product = await db.product.findUnique({ where: { id: productId }, select: { isFeatured: true } });
+  if (!product) return;
+  await db.product.update({ where: { id: productId }, data: { isFeatured: !product.isFeatured } });
+  await logAudit({ actorId: session.sub, action: "product.featuredToggled", entity: "Product", entityId: productId, diff: { isFeatured: !product.isFeatured } });
+  revalidatePath("/admin/products");
+  revalidatePath("/");
+}
+
+/** 👁 إظهار المنتج في المتجر أو إخفاؤه (مسودة) بضغطة. */
+export async function toggleProductVisibilityAction(productId: string, _formData: FormData) {
+  const session = await requireAdmin();
+  const product = await db.product.findUnique({ where: { id: productId }, select: { status: true } });
+  if (!product) return;
+  const status: ProductStatus = product.status === "ACTIVE" ? "DRAFT" : "ACTIVE";
+  await db.product.update({ where: { id: productId }, data: { status } });
+  await logAudit({ actorId: session.sub, action: status === "ACTIVE" ? "product.published" : "product.hidden", entity: "Product", entityId: productId });
+  revalidatePath("/admin/products");
+  revalidatePath("/");
+}
+
+/** نسخ منتج كامل (الصور، الخيارات، المخزون، الحقول المخصّصة) كمسودة جديدة للتعديل عليها. */
+export async function duplicateProductAction(productId: string, _formData: FormData) {
+  const session = await requireAdmin();
+  const source = await db.product.findUnique({
+    where: { id: productId },
+    include: { images: { orderBy: { position: "asc" } }, variants: { where: { isActive: true }, include: { inventory: true } } },
+  });
+  if (!source) return;
+
+  const nameAr = `${source.nameAr} (نسخة)`;
+  const slug = await uniqueSlug(slugify(nameAr, "product"), productSlugExists);
+  const suffix = () => Math.random().toString(36).slice(2, 6).toUpperCase();
+  const copy = await db.product.create({
+    data: {
+      slug,
+      nameAr,
+      shortDescAr: source.shortDescAr,
+      descAr: source.descAr,
+      categoryId: source.categoryId,
+      status: "DRAFT",
+      isFeatured: false,
+      promoTitle: source.promoTitle,
+      promoColor: source.promoColor,
+      basePrice: source.basePrice,
+      comparePrice: source.comparePrice,
+      costPrice: source.costPrice,
+      metaTitle: source.metaTitle,
+      metaDesc: source.metaDesc,
+      customFields: source.customFields ?? [],
+      optionGroups: source.optionGroups ?? [],
+      images: { create: source.images.map((i) => ({ url: i.url, alt: i.alt, position: i.position })) },
+      variants: {
+        create: source.variants.map((v) => ({
+          sku: `${v.sku.slice(0, 40)}-C${suffix()}`,
+          nameAr: v.nameAr,
+          options: v.options ?? {},
+          price: v.price,
+          comparePrice: v.comparePrice,
+          isActive: v.isActive,
+          inventory: { create: { onHand: v.inventory?.onHand ?? 0, reserved: 0, lowStockAt: v.inventory?.lowStockAt ?? 5 } },
+        })),
+      },
+    },
+  });
+  await logAudit({ actorId: session.sub, action: "product.duplicated", entity: "Product", entityId: copy.id, diff: { from: productId } });
+  revalidatePath("/admin/products");
+  redirect(`/admin/products/${copy.id}`);
 }

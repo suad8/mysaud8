@@ -1,5 +1,6 @@
 import { db } from "@/server/db";
-import { THEME_DEFAULTS, normalizeFooter, normalizeSectionOrder, type ThemeSettings } from "@/lib/theme";
+import { THEME_DEFAULTS, normalizeFooter, normalizeHeaderMenu, normalizeSectionOrder, type ThemeSettings } from "@/lib/theme";
+import { migrateLegacySections, sanitizeBlocks, type AnyHomeBlock } from "@/lib/home-blocks";
 
 /**
  * طبقة الإعدادات — تخزين مفتاح/قيمة في جدول Setting (JSON) بدل ترحيل
@@ -201,6 +202,7 @@ export async function getThemeSettings(): Promise<ThemeSettings> {
     sectionOrder: normalizeSectionOrder(theme.sectionOrder),
     featuredOrder: Array.isArray(theme.featuredOrder) ? theme.featuredOrder.filter((id) => typeof id === "string") : [],
     ...normalizeFooter(theme),
+    ...normalizeHeaderMenu(theme),
   };
 }
 
@@ -212,6 +214,37 @@ export function getHomepageSections() {
   return getSetting<HomepageSectionsSettings>("content.homepageSections", HOMEPAGE_SECTIONS_DEFAULTS);
 }
 
-export function saveHomepageSections(value: HomepageSectionsSettings) {
-  return setSetting("content.homepageSections", value);
+
+const HOME_BLOCKS_KEY = "theme.homeBlocks";
+
+/**
+ * أقسام الصفحة الرئيسية من «تصميم الرئيسية». قبل أول حفظ تُبنى تلقائياً من
+ * الأقسام القديمة الثابتة (الترتيب والإظهار والنصوص) فلا يتغيّر شكل المتجر.
+ */
+export async function getHomeBlocks(): Promise<AnyHomeBlock[]> {
+  const row = await db.setting.findUnique({ where: { key: HOME_BLOCKS_KEY } });
+  const saved = (row?.value as { blocks?: unknown } | null)?.blocks;
+  if (Array.isArray(saved)) return sanitizeBlocks(saved);
+  const [theme, visibility] = await Promise.all([getThemeSettings(), getHomepageSections()]);
+  return migrateLegacySections(theme, visibility);
+}
+
+export function saveHomeBlocks(blocks: AnyHomeBlock[]) {
+  return setSetting(HOME_BLOCKS_KEY, { blocks });
+}
+
+/** وضع الصيانة: الزوار يرون صفحة «نعود قريباً» بينما يتصفح المدير المسجّل دخوله المتجر كالمعتاد. */
+export type MaintenanceSettings = { enabled: boolean; message: string };
+
+const MAINTENANCE_DEFAULTS: MaintenanceSettings = {
+  enabled: false,
+  message: "نعمل حالياً على تحسين المتجر وسنعود قريباً — شكراً لصبركم.",
+};
+
+export function getMaintenanceSettings() {
+  return getSetting<MaintenanceSettings>("store.maintenance", MAINTENANCE_DEFAULTS);
+}
+
+export function saveMaintenanceSettings(value: MaintenanceSettings) {
+  return setSetting("store.maintenance", value);
 }

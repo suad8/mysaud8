@@ -8,6 +8,7 @@ export const ADMIN_NAV = [
   { href: "/admin/reviews", label: "التقييمات", icon: "M12 17.3 6.2 21l1.5-6.6L2.5 9.9l6.7-.6L12 3l2.8 6.3 6.7.6-5.2 4.5L18 21Z" },
   { href: "/admin/discounts", label: "الخصومات", icon: "M20 12l-8 8-9-9V4h7l10 8ZM7 7h.01" },
   { href: "/admin/shipping", label: "الشحن", icon: "M3 7h11v8H3zM14 10h4l3 3v2h-7z M7 18a2 2 0 100-4 2 2 0 000 4zM17 18a2 2 0 100-4 2 2 0 000 4z" },
+  { href: "/admin/homepage", label: "تصميم الرئيسية", icon: "M3 4h18v6H3zM3 14h8v6H3zM15 14h6v6h-6z" },
   { href: "/admin/theme", label: "الثيم", icon: "M12 3a9 9 0 1 0 0 18c1.1 0 1.5-.8 1.5-1.5 0-.9-.7-1.3-.7-2.2 0-.8.7-1.3 1.5-1.3H16a5 5 0 0 0 5-5c0-4.4-4-8-9-8ZM7.5 11a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm3-3.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm4 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" },
   { href: "/admin/pages", label: "الصفحات", icon: "M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6" },
   { href: "/admin/reports", label: "التقارير", icon: "M4 20V10m6 10V4m6 16v-7" },

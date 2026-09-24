@@ -9,6 +9,7 @@ import { orderAccessToken } from "@/server/orders/access";
 import { requireAdmin } from "@/server/auth/session";
 import { logAudit } from "@/server/audit/log";
 import { getClientIp } from "@/lib/request-ip";
+import { isStoreClosedForVisitor } from "@/server/maintenance";
 import { createRateLimiter } from "@/lib/rate-limit";
 import { OrderStatus, PaymentStatus, Prisma } from "@prisma/client";
 import { ORDER_STATUS, type OrderStatusKey } from "@/lib/constants";
@@ -64,6 +65,9 @@ export async function createOrderAction(
   formData: FormData,
 ): Promise<CheckoutFormState> {
   const values = readContactValues(formData);
+  if (await isStoreClosedForVisitor()) {
+    return { error: "المتجر في وضع الصيانة حالياً — لا يمكن استقبال طلبات جديدة، يرجى المحاولة لاحقاً.", values };
+  }
   const ip = (await getClientIp()) ?? "unknown";
   if (!orderAttempts.hit(ip)) {
     return { error: "عدد كبير من الطلبات خلال وقت قصير — يرجى المحاولة لاحقاً.", values };

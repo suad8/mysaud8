@@ -18,17 +18,6 @@ export const HOMEPAGE_SECTION_KEYS = [
 
 export type HomepageSectionKey = (typeof HOMEPAGE_SECTION_KEYS)[number];
 
-export const HOMEPAGE_SECTION_LABEL: Record<HomepageSectionKey, string> = {
-  hero: "البانر الرئيسي",
-  trustBar: "شريط المزايا",
-  categories: "التصنيفات",
-  featured: "المنتجات البارزة",
-  bundle: "العرض الترويجي (بندل)",
-  testimonials: "آراء العملاء",
-  arrivals: "وصل حديثاً",
-  finalCta: "الدعوة الأخيرة",
-};
-
 export type TrustItem = { title: string; desc: string };
 export type LinkItem = { label: string; href: string };
 /** عمود بالفوتر: عنوان + نص حر اختياري (ساعات العمل، العنوان، ملخص سياسة...) + روابط */
@@ -86,6 +75,10 @@ export type ThemeSettings = {
   accentColor: string;
   /** شريط الإعلان أعلى كل الصفحات — فارغ = إخفاء */
   announcement: string;
+  /** قائمة الهيدر: "categories" = التصنيفات تلقائياً، "custom" = روابط يختارها المدير بالترتيب */
+  headerMenuMode: "categories" | "custom";
+  headerMenu: LinkItem[];
+  /** ترتيب الأقسام القديمة الثابتة — يُستخدم فقط لترحيلها إلى «تصميم الرئيسية» */
   sectionOrder: HomepageSectionKey[];
 
   trustItems: TrustItem[];
@@ -144,6 +137,8 @@ export const THEME_DEFAULTS: ThemeSettings = {
   primaryColor: DEFAULT_PRIMARY_COLOR,
   accentColor: DEFAULT_ACCENT_COLOR,
   announcement: "طباعة احترافية بجودة ذهبية · توصيل لجميع مدن المملكة",
+  headerMenuMode: "categories",
+  headerMenu: [],
   sectionOrder: [...HOMEPAGE_SECTION_KEYS],
 
   trustItems: [
@@ -261,6 +256,19 @@ export function normalizeFooter(theme: Pick<ThemeSettings, "footerColumns" | "so
       links: Array.isArray(c?.links) ? c.links.filter((l) => typeof l?.label === "string" && typeof l?.href === "string") : [],
     })),
     socialLinks: social.filter((l) => SOCIAL_PLATFORMS.includes(l?.platform) && typeof l?.url === "string" && l.url.startsWith("https://")),
+  };
+}
+
+/** روابط قائمة الهيدر المحفوظة — تُستبعد أي عناصر ناقصة أو روابط غير آمنة. */
+export function normalizeHeaderMenu(theme: Pick<ThemeSettings, "headerMenuMode" | "headerMenu">) {
+  const items = Array.isArray(theme.headerMenu) ? theme.headerMenu : [];
+  return {
+    headerMenuMode: theme.headerMenuMode === "custom" ? ("custom" as const) : ("categories" as const),
+    headerMenu: items
+      .filter((l) => typeof l?.label === "string" && typeof l?.href === "string")
+      .map((l) => ({ label: l.label.slice(0, 40), href: safeHref(l.href, "") }))
+      .filter((l) => l.label && l.href)
+      .slice(0, 12),
   };
 }
 

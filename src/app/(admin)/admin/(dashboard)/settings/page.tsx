@@ -10,8 +10,8 @@ import { getDemoDataSummary } from "@/server/demo/cleanup";
 import { db } from "@/server/db";
 import { getSession } from "@/server/auth/session";
 import { AdminRole } from "@prisma/client";
-import { getBankTransferSettings, getMoyasarSettings, getSeoMarketingSettings, getStoreInfoSettings, maskSecret } from "@/server/settings";
-import { updateBankSettingsAction, updateGatewaySettingsAction } from "@/server/settings/actions";
+import { getBankTransferSettings, getMaintenanceSettings, getMoyasarSettings, getSeoMarketingSettings, getStoreInfoSettings, maskSecret } from "@/server/settings";
+import { updateBankSettingsAction, updateGatewaySettingsAction, updateMaintenanceAction } from "@/server/settings/actions";
 import { CURRENCY, SITE_URL, TAX_RATE } from "@/lib/constants";
 
 const CURRENCY_LABEL = CURRENCY === "SAR" ? "ريال سعودي (SAR)" : CURRENCY;
@@ -79,7 +79,7 @@ export default async function AdminSettingsPage() {
       ].filter((l): l is string => Boolean(l))
     : [];
 
-  const [bank, gateway, storeInfo, seo, users] = await Promise.all([
+  const [bank, gateway, storeInfo, seo, users, maintenance] = await Promise.all([
     getBankTransferSettings(),
     getMoyasarSettings(),
     getStoreInfoSettings(),
@@ -88,6 +88,7 @@ export default async function AdminSettingsPage() {
       orderBy: { lastLoginAt: "desc" },
       select: { id: true, name: true, email: true, role: true, isActive: true, lastLoginAt: true },
     }),
+    getMaintenanceSettings(),
   ]);
 
   return (
@@ -98,10 +99,36 @@ export default async function AdminSettingsPage() {
           <StoreInfoForm info={storeInfo} />
         </Section>
 
-        <Section title="التصميم والمحتوى" desc="البانر، الألوان، أقسام الصفحة الرئيسية، والفوتر.">
-          <p className="text-sm text-muted">انتقلت كل إعدادات تصميم المتجر إلى صفحة مستقلة.</p>
-          <Button href="/admin/theme" size="sm" variant="secondary">فتح صفحة الثيم ←</Button>
+        <Section title="التصميم والمحتوى" desc="أقسام الصفحة الرئيسية، الألوان، القائمة العلوية، والفوتر.">
+          <div className="flex flex-wrap gap-2">
+            <Button href="/admin/homepage" size="sm" variant="secondary">تصميم الرئيسية ←</Button>
+            <Button href="/admin/theme" size="sm" variant="secondary">الثيم ←</Button>
+          </div>
         </Section>
+
+        {isOwner && (
+          <form action={updateMaintenanceAction} className="lg:col-span-2">
+            <Section
+              title={maintenance.enabled ? "وضع الصيانة — مفعّل الآن 🔧" : "وضع الصيانة"}
+              desc="يغلق المتجر مؤقتاً: الزوار يرون صفحة «نعود قريباً» ولا يمكنهم الطلب، وأنت (المدير المسجّل) تتصفح المتجر كالمعتاد لتجهيزه."
+            >
+              <ToggleRow name="enabled" label="تفعيل وضع الصيانة" defaultChecked={maintenance.enabled} />
+              <label className="block text-sm">
+                <span className="mb-1.5 block font-medium text-muted">رسالة للزوار</span>
+                <textarea
+                  name="message"
+                  defaultValue={maintenance.message}
+                  rows={2}
+                  maxLength={400}
+                  className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500/40"
+                />
+              </label>
+              <div className="flex justify-end">
+                <Button type="submit" size="sm">حفظ وضع الصيانة</Button>
+              </div>
+            </Section>
+          </form>
+        )}
 
         <Section title="الضريبة والعملة">
           <Field name="taxRate" label="نسبة ضريبة القيمة المضافة" defaultValue={`${(TAX_RATE * 100).toFixed(0)}`} unit="%" disabled />

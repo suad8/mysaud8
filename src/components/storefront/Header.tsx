@@ -18,6 +18,12 @@ export async function Header() {
     getThemeSettings(),
   ]);
 
+  // القائمة: روابط اختارها المدير (الثيم ← القائمة العلوية)، أو التصنيفات تلقائياً
+  const menu =
+    theme.headerMenuMode === "custom"
+      ? theme.headerMenu.map((l) => ({ label: l.label, href: l.href }))
+      : categories.map((c) => ({ label: c.nameAr, href: `/c/${c.slug}` }));
+
   return (
     <header className="sticky top-0 z-40 border-b bg-[var(--surface-raised)]/85 backdrop-blur-md">
       {/* شريط الإعلان العلوي — نصه من الثيم، ويختفي إن كان فارغاً */}
@@ -34,13 +40,13 @@ export async function Header() {
         </Link>
 
         <nav className="hidden flex-1 items-center gap-1 lg:flex">
-          {categories.map((c) => (
+          {menu.map((l, i) => (
             <Link
-              key={c.slug}
-              href={`/c/${c.slug}`}
+              key={`${l.href}-${i}`}
+              href={l.href}
               className="rounded-lg px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-ink-100 hover:text-[var(--text-strong)] dark:hover:bg-ink-800"
             >
-              {c.nameAr}
+              {l.label}
             </Link>
           ))}
         </nav>
@@ -78,18 +84,16 @@ export async function Header() {
         </div>
       </div>
 
-      {/* تصنيفات الجوال */}
-      <nav className="scroll-x flex gap-2 border-t px-4 py-2 lg:hidden">
-        {categories.map((c) => (
-          <Link
-            key={c.slug}
-            href={`/c/${c.slug}`}
-            className="shrink-0 rounded-full border px-3.5 py-1.5 text-[13px] font-medium text-muted"
-          >
-            {c.nameAr}
-          </Link>
-        ))}
-      </nav>
+      {/* قائمة الجوال */}
+      {menu.length > 0 && (
+        <nav className="scroll-x flex gap-2 border-t px-4 py-2 lg:hidden">
+          {menu.map((l, i) => (
+            <Link key={`${l.href}-${i}`} href={l.href} className="shrink-0 rounded-full border px-3.5 py-1.5 text-[13px] font-medium text-muted">
+              {l.label}
+            </Link>
+          ))}
+        </nav>
+      )}
     </header>
   );
 }

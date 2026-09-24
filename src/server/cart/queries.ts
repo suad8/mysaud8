@@ -55,7 +55,9 @@ export async function getCartLines(): Promise<CartLine[]> {
       sku: item.variant.sku,
       slug: item.product.slug,
       nameAr: item.product.nameAr,
-      optionsLabel: Object.values(item.variant.options as Record<string, string>).join(" · "),
+      // اسم التركيبة المحفوظ بترتيب مجموعات المنتج (مثل «9 أونص / 500») — ترتيب مفاتيح
+      // JSON في قاعدة البيانات لا يُعتمد عليه للعرض
+      optionsLabel: item.variant.nameAr !== "الافتراضي" ? item.variant.nameAr : "",
       imageUrl: item.product.images[0]?.url ?? "/products/placeholder.svg",
       unitPrice: Number(item.variant.price),
       quantity: item.quantity,

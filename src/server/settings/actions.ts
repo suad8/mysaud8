@@ -11,6 +11,7 @@ import {
   getStoreInfoSettings,
   saveBankTransferSettings,
   saveHeroContent,
+  saveMaintenanceSettings,
   saveMoyasarSettings,
   saveSeoMarketingSettings,
   saveStoreInfoSettings,
@@ -128,7 +129,7 @@ export async function updateHeroContentAction(
   });
   await logAudit({ actorId: session.sub, action: "settings.hero.updated", entity: "Setting", entityId: "content.hero" });
 
-  revalidatePath("/admin/theme");
+  revalidatePath("/admin/homepage");
   revalidatePath("/");
   return {};
 }
@@ -163,4 +164,18 @@ export async function updateSeoMarketingAction(
   revalidatePath("/admin/settings");
   revalidatePath("/", "layout");
   return {};
+}
+
+/** وضع الصيانة يغلق المتجر أمام كل الزوار — للمالك فقط. */
+export async function updateMaintenanceAction(formData: FormData) {
+  const session = await requireOwner();
+  const enabled = formData.get("enabled") === "on";
+  await saveMaintenanceSettings({
+    enabled,
+    message: String(formData.get("message") ?? "").trim().slice(0, 400),
+  });
+  await logAudit({ actorId: session.sub, action: "settings.maintenance.updated", entity: "Setting", entityId: "store.maintenance", diff: { enabled } });
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/", "layout");
 }

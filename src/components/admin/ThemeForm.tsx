@@ -5,17 +5,9 @@ import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import { updateThemeAction, type ThemeFormState } from "@/server/theme/actions";
 import { FooterEditor, type LinkOptionGroup } from "@/components/admin/FooterEditor";
-import { FeaturedPicker, type FeaturedCandidate } from "@/components/admin/FeaturedPicker";
-import type { HomepageSectionsSettings } from "@/server/settings";
-import {
-  COLOR_PRESETS,
-  HOMEPAGE_SECTION_LABEL,
-  type HomepageSectionKey,
-  type ThemeSettings,
-  type TrustItem,
-} from "@/lib/theme";
+import { LinkSelect } from "@/components/admin/LinkSelect";
+import { COLOR_PRESETS, type LinkItem, type ThemeSettings, type TrustItem } from "@/lib/theme";
 
-type ProductOption = FeaturedCandidate & { slug: string };
 type LogoRow = { key: string; name: string; logoUrl: string };
 
 let rowSeq = 0;
@@ -60,21 +52,84 @@ function PairFields({ items, titleName, descName, titleLabel = "العنوان",
   );
 }
 
-export function ThemeForm({
-  theme,
-  visibility,
-  products,
-  linkOptions,
-}: {
-  theme: ThemeSettings;
-  visibility: HomepageSectionsSettings;
-  products: ProductOption[];
-  linkOptions: LinkOptionGroup[];
-}) {
+type MenuRow = { key: string; label: string; href: string };
+const MAX_MENU = 12;
+
+/** محرّر قائمة الهيدر: التصنيفات تلقائياً، أو روابط تختارها وترتّبها بنفسك. */
+function HeaderMenuEditor({ theme, saved, linkOptions }: { theme: ThemeSettings; saved?: LinkItem[]; linkOptions: LinkOptionGroup[] }) {
+  const [mode, setMode] = useState(theme.headerMenuMode);
+  const [rows, setRows] = useState<MenuRow[]>(() => theme.headerMenu.map((l) => ({ key: `m-${++rowSeq}`, ...l })));
+
+  useEffect(() => {
+    if (saved) setRows(saved.map((l) => ({ key: `m-${++rowSeq}`, ...l })));
+  }, [saved]);
+
+  const update = (key: string, patch: Partial<MenuRow>) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  const move = (i: number, d: -1 | 1) =>
+    setRows((rs) => {
+      const t = i + d;
+      if (t < 0 || t >= rs.length) return rs;
+      const copy = [...rs];
+      [copy[i], copy[t]] = [copy[t]!, copy[i]!];
+      return copy;
+    });
+
+  return (
+    <div className="space-y-3">
+      <input type="hidden" name="headerMenuJson" value={JSON.stringify(rows.map(({ label, href }) => ({ label, href })))} />
+      <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="محتوى القائمة">
+        {(
+          [
+            ["categories", "التصنيفات تلقائياً"],
+            ["custom", "روابط أختارها بنفسي"],
+          ] as const
+        ).map(([value, label]) => (
+          <label key={value} className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm ${mode === value ? "border-brand-600 ring-2 ring-brand-500/20" : ""}`}>
+            <input type="radio" name="headerMenuMode" value={value} checked={mode === value} onChange={() => setMode(value)} className="accent-brand-600" />
+            {label}
+          </label>
+        ))}
+      </div>
+      {mode === "categories" ? (
+        <p className="text-xs text-muted">تظهر التصنيفات الرئيسية المفعّلة بترتيبها في صفحة «التصنيفات».</p>
+      ) : (
+        <div className="space-y-2">
+          {rows.map((r, i) => (
+            <div key={r.key} className="grid grid-cols-[1fr_1fr_auto] items-start gap-1.5">
+              <input
+                aria-label="نص رابط القائمة"
+                value={r.label}
+                maxLength={40}
+                onChange={(e) => update(r.key, { label: e.target.value })}
+                placeholder="النص الظاهر"
+                className={inputCls}
+              />
+              <LinkSelect label="وجهة رابط القائمة" value={r.href} allowEmpty={false} linkOptions={linkOptions} onChange={(href, optionLabel) => update(r.key, { href, label: r.label || optionLabel || "" })} />
+              <div className="flex gap-1">
+                <button type="button" onClick={() => move(i, -1)} disabled={i === 0} className="grid h-10 w-8 place-items-center rounded-lg border text-sm disabled:opacity-30" aria-label="تقديم الرابط">↑</button>
+                <button type="button" onClick={() => move(i, 1)} disabled={i === rows.length - 1} className="grid h-10 w-8 place-items-center rounded-lg border text-sm disabled:opacity-30" aria-label="تأخير الرابط">↓</button>
+                <button type="button" onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))} className="grid h-10 w-8 place-items-center rounded-lg text-muted hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950" aria-label="حذف رابط القائمة">
+                  ✕
+                </button>
+              </div>
+            </div>
+          ))}
+          {rows.length < MAX_MENU && (
+            <button type="button" onClick={() => setRows((rs) => [...rs, { key: `m-${++rowSeq}`, label: "", href: "" }])} className="text-xs font-medium text-brand-700 hover:underline">
+              + إضافة رابط للقائمة
+            </button>
+          )}
+          {rows.length === 0 && <p className="text-xs text-muted">القائمة فارغة — أضف روابط، أو اختر «التصنيفات تلقائياً».</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function ThemeForm({ theme, linkOptions }: { theme: ThemeSettings; linkOptions: LinkOptionGroup[] }) {
   const [state, formAction, isPending] = useActionState<ThemeFormState, FormData>(updateThemeAction, {});
   const [primary, setPrimary] = useState(theme.primaryColor);
   const [accent, setAccent] = useState(theme.accentColor);
-  const [order, setOrder] = useState<HomepageSectionKey[]>(theme.sectionOrder);
   const [logos, setLogos] = useState<LogoRow[]>(() => theme.paymentLogos.map((l) => ({ key: nextKey(), ...l })));
 
   // بعد الحفظ: تحديث روابط الشعارات المرفوعة حديثاً حتى لا تُفقد عند الحفظ التالي
@@ -83,83 +138,6 @@ export function ThemeForm({
       setLogos(state.paymentLogos.map((l) => ({ key: nextKey(), ...l })));
     }
   }, [state]);
-
-  function move(index: number, delta: -1 | 1) {
-    setOrder((o) => {
-      const target = index + delta;
-      if (target < 0 || target >= o.length) return o;
-      const copy = [...o];
-      [copy[index], copy[target]] = [copy[target], copy[index]];
-      return copy;
-    });
-  }
-
-  function sectionFields(key: HomepageSectionKey) {
-    switch (key) {
-      case "hero":
-        return <p className="text-xs text-muted">نصوص البانر وصورته تُعدَّل من نموذج "البانر الرئيسي" أعلى الصفحة.</p>;
-      case "trustBar":
-        return <PairFields items={theme.trustItems} titleName="trustTitle" descName="trustDesc" titleLabel="الميزة" />;
-      case "categories":
-        return (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <TextField name="categoriesEyebrow" label="الشارة الصغيرة" defaultValue={theme.categoriesEyebrow} />
-            <TextField name="categoriesTitle" label="العنوان" defaultValue={theme.categoriesTitle} />
-          </div>
-        );
-      case "featured":
-        return (
-          <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <TextField name="featuredTitle" label="العنوان" defaultValue={theme.featuredTitle} />
-              <TextField name="featuredSubtitle" label="الوصف" defaultValue={theme.featuredSubtitle} />
-              <TextField name="featuredLinkText" label="نص رابط عرض الكل" defaultValue={theme.featuredLinkText} />
-              <TextField name="featuredLinkHref" label="رابط عرض الكل" defaultValue={theme.featuredLinkHref} dir="ltr" />
-            </div>
-            <FeaturedPicker products={products} initialOrder={theme.featuredOrder} initialCount={theme.featuredCount} />
-          </div>
-        );
-      case "bundle":
-        return (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm sm:col-span-2">
-              <span className="mb-1 block text-xs font-medium text-muted">المنتج المعروض</span>
-              <select name="bundleProductSlug" defaultValue={theme.bundleProductSlug} className={inputCls}>
-                <option value="">تلقائي (أحدث منتج عليه خصم)</option>
-                {products.map((p) => (
-                  <option key={p.slug} value={p.slug}>{p.nameAr}</option>
-                ))}
-              </select>
-            </label>
-            <TextField name="bundleBadge" label="الشارة" defaultValue={theme.bundleBadge} />
-            <TextField name="bundleCtaText" label="نص الزر" defaultValue={theme.bundleCtaText} />
-          </div>
-        );
-      case "testimonials":
-        return (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <TextField name="testimonialsEyebrow" label="الشارة الصغيرة" defaultValue={theme.testimonialsEyebrow} />
-            <TextField name="testimonialsTitle" label="العنوان" defaultValue={theme.testimonialsTitle} />
-          </div>
-        );
-      case "arrivals":
-        return (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <TextField name="arrivalsTitle" label="العنوان" defaultValue={theme.arrivalsTitle} />
-            <TextField name="arrivalsCount" label="عدد المنتجات" type="number" defaultValue={theme.arrivalsCount} />
-          </div>
-        );
-      case "finalCta":
-        return (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <TextField name="finalCtaTitle" label="العنوان" defaultValue={theme.finalCtaTitle} />
-            <TextField name="finalCtaText" label="النص" defaultValue={theme.finalCtaText} />
-            <TextField name="finalCtaButtonText" label="نص الزر" defaultValue={theme.finalCtaButtonText} />
-            <TextField name="finalCtaButtonHref" label="رابط الزر" defaultValue={theme.finalCtaButtonHref} dir="ltr" />
-          </div>
-        );
-    }
-  }
 
   return (
     <form
@@ -220,27 +198,9 @@ export function ThemeForm({
         <TextField name="announcement" label="النص" defaultValue={theme.announcement} placeholder="مثال: شحن مجاني للطلبات فوق 200 ر.س" />
       </Card>
 
-      {/* أقسام الصفحة الرئيسية */}
-      <Card title="أقسام الصفحة الرئيسية" desc="أظهر أو أخفِ أي قسم، رتّبها بالأسهم، وعدّل نصوص كل قسم." open>
-        <div className="space-y-3">
-          {order.map((key, i) => (
-            <div key={key} className="rounded-xl border p-4">
-              <input type="hidden" name="sectionOrder" value={key} />
-              <div className="flex items-center justify-between gap-3">
-                <label className="flex items-center gap-2.5 text-sm font-semibold">
-                  <input type="checkbox" name={`visible_${key}`} defaultChecked={visibility[key]} className="h-4 w-4 accent-brand-600" />
-                  <span className="num text-xs text-muted">{i + 1}.</span>
-                  {HOMEPAGE_SECTION_LABEL[key]}
-                </label>
-                <div className="flex gap-1">
-                  <button type="button" onClick={() => move(i, -1)} disabled={i === 0} className="grid h-8 w-8 place-items-center rounded-lg border text-sm disabled:opacity-30" aria-label="تحريك للأعلى">↑</button>
-                  <button type="button" onClick={() => move(i, 1)} disabled={i === order.length - 1} className="grid h-8 w-8 place-items-center rounded-lg border text-sm disabled:opacity-30" aria-label="تحريك للأسفل">↓</button>
-                </div>
-              </div>
-              <div className="mt-3">{sectionFields(key)}</div>
-            </div>
-          ))}
-        </div>
+      {/* قائمة الهيدر */}
+      <Card title="القائمة العلوية (الهيدر)" desc="الروابط التي تظهر بجانب الشعار أعلى كل الصفحات.">
+        <HeaderMenuEditor theme={theme} saved={state.success ? state.headerMenu : undefined} linkOptions={linkOptions} />
       </Card>
 
       {/* صفحة المنتج */}

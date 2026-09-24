@@ -9,6 +9,8 @@ import { PRODUCT_STATUS } from "@/lib/constants";
 import { formatNumber } from "@/lib/format";
 import type { Prisma, ProductStatus } from "@prisma/client";
 import { requireAdminPage } from "@/server/auth/session";
+import { duplicateProductAction, toggleProductFeaturedAction, toggleProductVisibilityAction } from "@/server/products/actions";
+import { promoClass } from "@/lib/promo";
 
 type Props = { searchParams: Promise<{ q?: string; status?: string }> };
 
@@ -128,7 +130,10 @@ export default async function AdminProductsPage({ searchParams }: Props) {
                             </div>
                             <div className="min-w-0">
                               <p className="truncate font-medium">{p.nameAr}</p>
-                              <p className="text-xs text-muted">{p.variants.length} متغيّر</p>
+                              <p className="flex items-center gap-1.5 text-xs text-muted">
+                                {p.variants.length} متغيّر
+                                {p.promoTitle && <span className={`rounded-full px-1.5 py-px text-[10px] font-bold ${promoClass(p.promoColor)}`}>{p.promoTitle}</span>}
+                              </p>
                             </div>
                           </Link>
                         </td>
@@ -140,10 +145,39 @@ export default async function AdminProductsPage({ searchParams }: Props) {
                           </Badge>
                         </td>
                         <td className="px-5 py-3"><Badge tone={meta.tone}>{meta.label}</Badge></td>
-                        <td className="px-5 py-3 text-end">
-                          <Link href={`/admin/products/${p.id}`} className="text-xs font-medium text-brand-700 hover:underline">
-                            تعديل
-                          </Link>
+                        <td className="px-5 py-3">
+                          {/* أدوات سريعة: تمييز، إظهار/إخفاء، نسخ، تعديل */}
+                          <div className="flex items-center justify-end gap-1">
+                            <form action={toggleProductFeaturedAction.bind(null, p.id)}>
+                              <button
+                                type="submit"
+                                title={p.isFeatured ? "إلغاء التمييز" : "تمييز كمنتج بارز"}
+                                aria-label={p.isFeatured ? "إلغاء التمييز" : "تمييز كمنتج بارز"}
+                                aria-pressed={p.isFeatured}
+                                className={`grid h-8 w-8 place-items-center rounded-lg text-base hover:bg-[var(--surface-sunken)] ${p.isFeatured ? "text-accent-500" : "text-ink-300 dark:text-ink-600"}`}
+                              >
+                                {p.isFeatured ? "★" : "☆"}
+                              </button>
+                            </form>
+                            <form action={toggleProductVisibilityAction.bind(null, p.id)}>
+                              <button
+                                type="submit"
+                                title={p.status === "ACTIVE" ? "إخفاء من المتجر" : "نشر في المتجر"}
+                                aria-label={p.status === "ACTIVE" ? "إخفاء من المتجر" : "نشر في المتجر"}
+                                className="rounded-lg px-2 py-1.5 text-xs font-medium text-muted hover:bg-[var(--surface-sunken)] hover:text-[var(--text-strong)]"
+                              >
+                                {p.status === "ACTIVE" ? "إخفاء" : "نشر"}
+                              </button>
+                            </form>
+                            <form action={duplicateProductAction.bind(null, p.id)}>
+                              <button type="submit" title="نسخ المنتج" aria-label="نسخ المنتج" className="rounded-lg px-2 py-1.5 text-xs font-medium text-muted hover:bg-[var(--surface-sunken)] hover:text-[var(--text-strong)]">
+                                نسخ
+                              </button>
+                            </form>
+                            <Link href={`/admin/products/${p.id}`} className="rounded-lg px-2 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-50 dark:hover:bg-brand-950">
+                              تعديل
+                            </Link>
+                          </div>
                         </td>
                       </tr>
                     );
