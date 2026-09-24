@@ -16,13 +16,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return [
     { url: SITE_URL, lastModified: new Date(), changeFrequency: "daily", priority: 1 },
     ...categories.map((c) => ({
-      url: `${SITE_URL}/c/${c.slug}`,
+      url: `${SITE_URL}/c/${encodeURIComponent(c.slug)}`,
       lastModified: c.updatedAt,
       changeFrequency: "daily" as const,
       priority: 0.8,
     })),
     ...products.map((p) => ({
-      url: `${SITE_URL}/p/${p.slug}`,
+      url: `${SITE_URL}/p/${encodeURIComponent(p.slug)}`,
       lastModified: p.updatedAt,
       changeFrequency: "weekly" as const,
       priority: 0.7,

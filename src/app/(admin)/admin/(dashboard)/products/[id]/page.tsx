@@ -13,6 +13,7 @@ import {
   softDeleteProductAction,
 } from "@/server/products/actions";
 import { PRODUCT_STATUS } from "@/lib/constants";
+import { parseCustomFieldDefs } from "@/server/products/custom-fields";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -45,6 +46,7 @@ export default async function EditProductPage({ params }: Props) {
       price: v.price.toString(),
       stock: v.inventory?.onHand ?? 0,
     })),
+    customFields: parseCustomFieldDefs(product.customFields),
   };
 
   const meta = PRODUCT_STATUS[product.status];

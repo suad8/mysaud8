@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import type { ProductFormState } from "@/server/products/actions";
+import type { CustomFieldDef, CustomFieldType } from "@/server/products/custom-fields";
 
 type Category = { id: string; nameAr: string };
 
@@ -29,6 +30,7 @@ export type ProductFormInitial = {
   costPrice: string;
   images: ExistingImage[];
   variants: VariantRow[];
+  customFields: CustomFieldDef[];
 };
 
 const EMPTY: ProductFormInitial = {
@@ -43,16 +45,24 @@ const EMPTY: ProductFormInitial = {
   costPrice: "",
   images: [],
   variants: [],
+  customFields: [],
 };
 
 type Action = (state: ProductFormState, formData: FormData) => Promise<ProductFormState>;
 
 type EditableVariant = { key: string; id: string | null; nameAr: string; price: string; stock: string };
+type EditableCustomField = { key: string; id: string; label: string; type: CustomFieldType; required: boolean };
 
 let rowCounter = 0;
 function newRowKey() {
   rowCounter += 1;
   return `new-${rowCounter}`;
+}
+
+let fieldCounter = 0;
+function newFieldId() {
+  fieldCounter += 1;
+  return `cf-${Date.now()}-${fieldCounter}`;
 }
 
 export function ProductForm({
@@ -100,6 +110,22 @@ export function ProductForm({
     if (checked && rows.length === 1 && !rows[0].nameAr) {
       updateRow(rows[0].key, "nameAr", "الخيار الأول");
     }
+  }
+
+  const [customFields, setCustomFields] = useState<EditableCustomField[]>(() =>
+    data.customFields.map((f) => ({ key: f.id, id: f.id, label: f.label, type: f.type, required: f.required })),
+  );
+
+  function addCustomField() {
+    setCustomFields((f) => [...f, { key: newFieldId(), id: newFieldId(), label: "", type: "TEXT", required: false }]);
+  }
+
+  function removeCustomField(key: string) {
+    setCustomFields((f) => f.filter((x) => x.key !== key));
+  }
+
+  function updateCustomField(key: string, patch: Partial<Pick<EditableCustomField, "label" | "type" | "required">>) {
+    setCustomFields((f) => f.map((x) => (x.key === key ? { ...x, ...patch } : x)));
   }
 
   const err = (field: string) => state.fieldErrors?.[field];
@@ -218,6 +244,61 @@ export function ProductForm({
                 </button>
               </div>
             )}
+          </section>
+
+          {/* حقول مخصّصة يملؤها العميل عند الشراء — نص أو رفع ملف/صورة (مثل
+              "أرفق تصميمك" لطلبات الطباعة المخصّصة). تختلف عن "الخيارات" أعلاه:
+              لا تغيّر السعر أو المخزون، هي بيانات يزوّدها العميل نفسه لكل طلب. */}
+          <section className="surface-card p-5">
+            <h2 className="text-sm font-semibold">حقول مخصّصة للعميل</h2>
+            <p className="mt-1 text-xs text-muted">
+              مثل "أرفق تصميمك" (ملف أو صورة) أو ملاحظة نصية — تظهر بصفحة المنتج ويملؤها العميل قبل الإضافة للسلة.
+            </p>
+            <div className="mt-4 space-y-3">
+              {customFields.map((f) => (
+                <div key={f.key} className="flex flex-wrap items-center gap-2.5 rounded-lg border p-3">
+                  <input type="hidden" name="customFieldId" value={f.id} />
+                  <input type="hidden" name="customFieldRequired" value={f.required ? "on" : ""} />
+                  <input
+                    name="customFieldLabel"
+                    value={f.label}
+                    onChange={(e) => updateCustomField(f.key, { label: e.target.value })}
+                    placeholder="عنوان الحقل (مثال: أرفق تصميمك)"
+                    className="h-10 min-w-[160px] flex-1 rounded-lg border bg-transparent px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500/40"
+                  />
+                  <select
+                    name="customFieldType"
+                    value={f.type}
+                    onChange={(e) => updateCustomField(f.key, { type: e.target.value as CustomFieldType })}
+                    className="h-10 rounded-lg border bg-transparent px-2 text-sm outline-none focus:ring-2 focus:ring-brand-500/40"
+                  >
+                    <option value="TEXT">نص قصير</option>
+                    <option value="TEXTAREA">نص طويل</option>
+                    <option value="FILE">ملف أو صورة</option>
+                  </select>
+                  <label className="flex items-center gap-1.5 text-xs whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      checked={f.required}
+                      onChange={(e) => updateCustomField(f.key, { required: e.target.checked })}
+                      className="h-4 w-4 accent-brand-600"
+                    />
+                    مطلوب
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => removeCustomField(f.key)}
+                    className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-muted hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                    aria-label="إزالة الحقل"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <button type="button" onClick={addCustomField} className="text-xs font-medium text-brand-700 hover:underline">
+                + إضافة حقل مخصّص
+              </button>
+            </div>
           </section>
         </div>
 

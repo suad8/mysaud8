@@ -5,6 +5,7 @@ import { Price } from "@/components/ui/Price";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { addToCartAction } from "@/server/cart/actions";
+import type { CustomFieldDef } from "@/server/products/custom-fields";
 
 export type PurchaseVariant = {
   id: string;
@@ -14,10 +15,24 @@ export type PurchaseVariant = {
   available: number;
 };
 
-export function ProductPurchasePanel({ variants }: { variants: PurchaseVariant[] }) {
+export function ProductPurchasePanel({
+  variants,
+  customFields,
+}: {
+  variants: PurchaseVariant[];
+  customFields: CustomFieldDef[];
+}) {
   const [state, formAction, isPending] = useActionState(addToCartAction, {});
   const [selectedId, setSelectedId] = useState(variants[0]?.id ?? "");
   const [quantity, setQuantity] = useState(1);
+  const [textValues, setTextValues] = useState<Record<string, string>>({});
+  const [fileNames, setFileNames] = useState<Record<string, string | null>>({});
+
+  const missingRequired = customFields.some((f) => {
+    if (!f.required) return false;
+    if (f.type === "FILE") return !fileNames[f.id];
+    return !textValues[f.id]?.trim();
+  });
 
   const selected = useMemo(() => variants.find((v) => v.id === selectedId) ?? variants[0], [variants, selectedId]);
   const hasVariants = variants.length > 1;
@@ -70,6 +85,46 @@ export function ProductPurchasePanel({ variants }: { variants: PurchaseVariant[]
         <input type="hidden" name="variantId" value={selectedId} />
         <input type="hidden" name="quantity" value={quantity} />
 
+        {customFields.length > 0 && (
+          <div className="mb-5 space-y-4">
+            {customFields.map((f) => (
+              <label key={f.id} className="block text-sm">
+                <span className="mb-1.5 block font-medium text-muted">
+                  {f.label}
+                  {f.required && <span className="text-red-600"> *</span>}
+                </span>
+                {f.type === "TEXTAREA" ? (
+                  <textarea
+                    name={`customField_${f.id}`}
+                    rows={3}
+                    maxLength={1000}
+                    onChange={(e) => setTextValues((v) => ({ ...v, [f.id]: e.target.value }))}
+                    className="w-full rounded-xl border bg-transparent px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-500/40"
+                  />
+                ) : f.type === "FILE" ? (
+                  <label className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed text-xs text-muted hover:border-brand-400 hover:text-brand-600">
+                    <input
+                      type="file"
+                      name={`customField_${f.id}`}
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
+                      className="hidden"
+                      onChange={(e) => setFileNames((v) => ({ ...v, [f.id]: e.target.files?.[0]?.name ?? null }))}
+                    />
+                    <span>{fileNames[f.id] ?? "اختر ملفاً أو صورة"}</span>
+                  </label>
+                ) : (
+                  <input
+                    name={`customField_${f.id}`}
+                    maxLength={1000}
+                    onChange={(e) => setTextValues((v) => ({ ...v, [f.id]: e.target.value }))}
+                    className="h-11 w-full rounded-xl border bg-transparent px-3.5 text-sm outline-none focus:ring-2 focus:ring-brand-500/40"
+                  />
+                )}
+              </label>
+            ))}
+          </div>
+        )}
+
         <div className="flex items-center gap-3">
           <div className="flex h-12 items-center rounded-xl border">
             <button
@@ -92,7 +147,7 @@ export function ProductPurchasePanel({ variants }: { variants: PurchaseVariant[]
               +
             </button>
           </div>
-          <Button type="submit" size="lg" className="flex-1" disabled={outOfStock || isPending}>
+          <Button type="submit" size="lg" className="flex-1" disabled={outOfStock || isPending || missingRequired}>
             {outOfStock ? "نفد المخزون" : isPending ? "جارٍ الإضافة…" : "أضف إلى السلة"}
           </Button>
         </div>

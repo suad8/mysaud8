@@ -126,6 +126,7 @@ export async function createOrderFromCheckout(input: CreateOrderInput) {
                 nameAr: l.nameAr,
                 sku: l.sku,
                 imageUrl: l.imageUrl,
+                options: l.customValues,
                 unitPrice: l.unitPrice,
                 quantity: l.quantity,
                 lineTotal: l.unitPrice * l.quantity,

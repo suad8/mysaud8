@@ -58,6 +58,15 @@ export default async function CartPage() {
                   <div>
                     <Link href={`/p/${line.slug}`} className="text-sm font-semibold hover:underline">{line.nameAr}</Link>
                     {line.optionsLabel && <p className="mt-0.5 text-xs text-muted">{line.optionsLabel}</p>}
+                    {line.customValues.length > 0 && (
+                      <ul className="mt-1 space-y-0.5">
+                        {line.customValues.map((v, i) => (
+                          <li key={i} className="text-xs text-muted">
+                            {v.label}: {v.type === "FILE" ? "تم إرفاق الملف ✓" : v.value}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                     {line.quantity > line.available && (
                       <p className="mt-0.5 text-xs text-red-600">المتاح الآن {line.available} فقط</p>
                     )}

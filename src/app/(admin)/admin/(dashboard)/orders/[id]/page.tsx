@@ -12,6 +12,7 @@ import { db } from "@/server/db";
 import { ORDER_STATUS, PAYMENT_METHOD_LABEL, type OrderStatusKey } from "@/lib/constants";
 import { formatDateTime } from "@/lib/format";
 import { confirmBankPaymentAction, rejectBankPaymentAction, updateOrderStatusAction } from "@/server/orders/actions";
+import { parseCustomFieldValues } from "@/server/products/custom-fields";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -67,18 +68,41 @@ export default async function AdminOrderDetailPage({ params }: Props) {
               <Badge tone={meta.tone}>{meta.label}</Badge>
             </div>
             <ul className="mt-4 divide-y">
-              {order.items.map((item) => (
-                <li key={item.id} className="flex items-center gap-4 px-5 py-4">
-                  <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-[var(--surface-sunken)]">
-                    <Image src={item.imageUrl ?? "/products/placeholder.svg"} alt="" fill sizes="56px" className="object-cover" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{item.nameAr}</p>
-                    <p className="num text-xs text-muted">SKU {item.sku} · الكمية {item.quantity}</p>
-                  </div>
-                  <Price value={item.lineTotal.toString()} size="sm" />
-                </li>
-              ))}
+              {order.items.map((item) => {
+                const customValues = parseCustomFieldValues(item.options);
+                return (
+                  <li key={item.id} className="flex items-center gap-4 px-5 py-4">
+                    <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-[var(--surface-sunken)]">
+                      <Image src={item.imageUrl ?? "/products/placeholder.svg"} alt="" fill sizes="56px" className="object-cover" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{item.nameAr}</p>
+                      <p className="num text-xs text-muted">SKU {item.sku} · الكمية {item.quantity}</p>
+                      {customValues.length > 0 && (
+                        <ul className="mt-1.5 space-y-0.5">
+                          {customValues.map((v, i) => (
+                            <li key={i} className="text-xs text-muted">
+                              {v.type === "FILE" ? (
+                                <>
+                                  {v.label}:{" "}
+                                  <a href={v.value} target="_blank" rel="noopener noreferrer" className="font-medium text-brand-700 hover:underline">
+                                    عرض الملف ↗
+                                  </a>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="font-medium">{v.label}:</span> {v.value}
+                                </>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                    <Price value={item.lineTotal.toString()} size="sm" />
+                  </li>
+                );
+              })}
             </ul>
             <dl className="space-y-2 border-t p-5 text-sm">
               <div className="flex justify-between"><dt className="text-muted">المجموع الفرعي</dt><dd><Price value={order.subtotal.toString()} size="sm" /></dd></div>

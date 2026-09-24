@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { ProductCard } from "@/components/storefront/ProductCard";
 import { getProductsByCategory } from "@/server/catalog/queries";
 import { formatNumber } from "@/lib/format";
+import { decodeSlug } from "@/lib/route-params";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -17,13 +18,13 @@ const SORTS = [
 ];
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { slug } = await params;
+  const slug = decodeSlug((await params).slug);
   const { category } = await getProductsByCategory(slug);
   return { title: category?.nameAr ?? "التصنيف" };
 }
 
 export default async function CategoryPage({ params, searchParams }: Props) {
-  const { slug } = await params;
+  const slug = decodeSlug((await params).slug);
   const { sort = "newest" } = await searchParams;
   const { category, products } = await getProductsByCategory(slug, { sort });
 

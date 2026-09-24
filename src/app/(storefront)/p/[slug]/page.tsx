@@ -8,6 +8,8 @@ import { ProductPurchasePanel } from "@/components/storefront/ProductPurchasePan
 import { ReviewForm } from "@/components/storefront/ReviewForm";
 import { getProductBySlug, getRelatedProducts } from "@/server/catalog/queries";
 import { getStoreInfoSettings } from "@/server/settings";
+import { parseCustomFieldDefs } from "@/server/products/custom-fields";
+import { decodeSlug } from "@/lib/route-params";
 import { formatDate } from "@/lib/format";
 import { toJsonLd } from "@/lib/json-ld";
 import { CURRENCY, SITE_URL } from "@/lib/constants";
@@ -15,7 +17,7 @@ import { CURRENCY, SITE_URL } from "@/lib/constants";
 type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { slug } = await params;
+  const slug = decodeSlug((await params).slug);
   const product = await getProductBySlug(slug);
   if (!product) return { title: "منتج" };
 
@@ -26,7 +28,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description,
-    alternates: { canonical: `${SITE_URL}/p/${slug}` },
+    alternates: { canonical: `${SITE_URL}/p/${encodeURIComponent(slug)}` },
     openGraph: { title, description, images: image ? [{ url: image }] : undefined },
   };
 }
@@ -50,7 +52,7 @@ function buildProductJsonLd(
     brand: { "@type": "Brand", name: storeName },
     offers: {
       "@type": "Offer",
-      url: `${SITE_URL}/p/${product.slug}`,
+      url: `${SITE_URL}/p/${encodeURIComponent(product.slug)}`,
       priceCurrency: CURRENCY,
       price: price.toFixed(2),
       availability: totalAvailable > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
@@ -69,7 +71,7 @@ function buildProductJsonLd(
 }
 
 export default async function ProductPage({ params }: Props) {
-  const { slug } = await params;
+  const slug = decodeSlug((await params).slug);
   const [product, storeInfo] = await Promise.all([getProductBySlug(slug), getStoreInfoSettings()]);
   if (!product) notFound();
 
@@ -132,6 +134,7 @@ export default async function ProductPage({ params }: Props) {
                 comparePrice: v.comparePrice,
                 available: v.available,
               }))}
+              customFields={parseCustomFieldDefs(product.customFields)}
             />
           </div>
 

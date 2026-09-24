@@ -7,6 +7,7 @@ import { saveUploadedFile, UploadError } from "@/lib/uploads";
 import { requireAdmin } from "@/server/auth/session";
 import { logAudit } from "@/server/audit/log";
 import { ProductStatus } from "@prisma/client";
+import type { CustomFieldDef, CustomFieldType } from "@/server/products/custom-fields";
 
 export type ProductFormState = {
   error?: string;
@@ -71,6 +72,26 @@ function parseVariantRows(formData: FormData): { error: string } | { rows: Varia
     rows.push({ id: ids[i] || null, nameAr, price: round2(price), stock });
   }
   return { rows };
+}
+
+const CUSTOM_FIELD_TYPES: CustomFieldType[] = ["TEXT", "TEXTAREA", "FILE"];
+
+/** يقرأ الحقول المخصّصة (نص/ملف) من الحقول المتكررة الاسم ويتحقق من صحتها. */
+function parseCustomFields(formData: FormData): { error: string } | { fields: CustomFieldDef[] } {
+  const ids = formData.getAll("customFieldId").map((v) => String(v));
+  const labels = formData.getAll("customFieldLabel").map((v) => String(v).trim());
+  const types = formData.getAll("customFieldType").map((v) => String(v));
+  const requiredFlags = formData.getAll("customFieldRequired").map((v) => v === "on");
+
+  const fields: CustomFieldDef[] = [];
+  for (let i = 0; i < labels.length; i++) {
+    const label = labels[i];
+    if (!label) return { error: "عنوان كل حقل مخصّص مطلوب" };
+    const type = types[i];
+    if (!CUSTOM_FIELD_TYPES.includes(type as CustomFieldType)) return { error: "نوع حقل مخصّص غير صالح" };
+    fields.push({ id: ids[i] || `cf-${Date.now()}-${i}`, label, type: type as CustomFieldType, required: requiredFlags[i] ?? false });
+  }
+  return { fields };
 }
 
 /** SKU عشوائي مقروء لخيار جديد — يكفي احتمال التصادم الضئيل جداً نطاق كتالوج متجر واحد. */
@@ -139,6 +160,10 @@ export async function createProductAction(
     variantRows = result.rows;
   }
 
+  const customFieldsResult = parseCustomFields(formData);
+  if ("error" in customFieldsResult) return { error: customFieldsResult.error };
+  const customFields = customFieldsResult.fields;
+
   let imageUrl: string | null = null;
   const file = formData.get("image");
   if (file instanceof File && file.size > 0) {
@@ -188,6 +213,7 @@ export async function createProductAction(
         costPrice: parsed.costPrice,
         metaTitle: parsed.nameAr,
         metaDesc: parsed.shortDescAr,
+        customFields,
         images: imageUrl ? { create: [{ url: imageUrl, alt: parsed.nameAr, position: 0 }] } : undefined,
         variants: { create: variantsCreate },
       },
@@ -231,6 +257,10 @@ export async function updateProductAction(
     variantRows = result.rows;
   }
 
+  const customFieldsResult = parseCustomFields(formData);
+  if ("error" in customFieldsResult) return { error: customFieldsResult.error };
+  const customFields = customFieldsResult.fields;
+
   let newImageUrl: string | null = null;
   const file = formData.get("image");
   if (file instanceof File && file.size > 0) {
@@ -255,6 +285,7 @@ export async function updateProductAction(
           basePrice: parsed.basePrice,
           comparePrice: parsed.comparePrice,
           costPrice: parsed.costPrice,
+          customFields,
         },
       });
 

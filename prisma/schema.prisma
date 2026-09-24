@@ -72,6 +72,10 @@ model Product {
   metaTitle   String?
   metaDesc    String?
 
+  /// حقول مخصّصة يملؤها العميل عند الشراء (نص أو رفع ملف/صورة، مثل "أرفق تصميمك")
+  /// — مصفوفة { id, label, type: TEXT|TEXTAREA|FILE, required }
+  customFields Json @default("[]")
+
   images      ProductImage[]
   variants    ProductVariant[]
   reviews     Review[]
@@ -253,9 +257,13 @@ model CartItem {
   variantId String
   variant   ProductVariant @relation(fields: [variantId], references: [id])
   quantity  Int
+  /// قيم الحقول المخصّصة التي أدخلها العميل — [{ label, type, value }]؛
+  /// عناصر بحقول مخصّصة مختلفة لا تُدمَج تلقائياً حتى لو كان نفس المتغيّر
+  /// (كل رفع تصميم مستقل)، لذا لا يوجد قيد تفرّد على (cartId, variantId).
+  customValues Json         @default("[]")
   createdAt DateTime       @default(now())
 
-  @@unique([cartId, variantId])
+  @@index([cartId, variantId])
 }
 
 // ─────────────────────────────────────────────────────────────

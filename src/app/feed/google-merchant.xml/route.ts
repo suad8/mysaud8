@@ -39,7 +39,7 @@ export async function GET() {
       const variant = p.variants[0];
       const available = Math.max(0, (variant.inventory?.onHand ?? 0) - (variant.inventory?.reserved ?? 0));
       const price = Number(variant.price);
-      const link = `${SITE_URL}/p/${p.slug}`;
+      const link = `${SITE_URL}/p/${encodeURIComponent(p.slug)}`;
       const imageLink = `${SITE_URL}${p.images[0].url}`;
       const description = p.shortDescAr ?? p.descAr ?? p.nameAr;
 

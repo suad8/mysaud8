@@ -13,8 +13,8 @@ import { getSession } from "@/server/auth/session";
  * الديناميكي يقرأ من القرص مباشرة في كل طلب فيعمل دائماً بلا إعادة تشغيل.
  */
 
-/** مجلدات تحتوي مستندات حسّاسة (إيصالات تحويل بنكي) — تُقرأ فقط من لوحة التحكم. */
-const ADMIN_ONLY_SUBDIRS = new Set(["receipts"]);
+/** مجلدات تحتوي مستندات حسّاسة (إيصالات تحويل بنكي، ملفات مخصّصة رفعها عملاء) — تُقرأ فقط من لوحة التحكم. */
+const ADMIN_ONLY_SUBDIRS = new Set(["receipts", "custom-fields"]);
 
 const MIME: Record<string, string> = {
   ".jpg": "image/jpeg",

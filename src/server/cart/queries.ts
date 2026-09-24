@@ -1,5 +1,6 @@
 import { db } from "@/server/db";
 import { getCartSessionId } from "@/server/cart/session";
+import { parseCustomFieldValues, type CustomFieldValue } from "@/server/products/custom-fields";
 
 async function getCart() {
   const sessionId = await getCartSessionId();
@@ -32,6 +33,8 @@ export type CartLine = {
   quantity: number;
   /** المتاح فعلياً الآن (onHand - reserved) — للتحقق قبل الدفع وتحديد الحد الأقصى للزيادة */
   available: number;
+  /** قيم الحقول المخصّصة التي أدخلها العميل (نص أو رابط ملف مرفوع) */
+  customValues: CustomFieldValue[];
 };
 
 /**
@@ -57,6 +60,7 @@ export async function getCartLines(): Promise<CartLine[]> {
       unitPrice: Number(item.variant.price),
       quantity: item.quantity,
       available: Math.max(0, (item.variant.inventory?.onHand ?? 0) - (item.variant.inventory?.reserved ?? 0)),
+      customValues: parseCustomFieldValues(item.customValues),
     }));
 }
 

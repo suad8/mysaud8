@@ -5,8 +5,47 @@ import { db } from "@/server/db";
 import { getCartSessionId, getOrCreateCartSessionId } from "@/server/cart/session";
 import { getCartLines } from "@/server/cart/queries";
 import { validateCoupon } from "@/server/discounts/validate";
+import { saveUploadedFile, UploadError } from "@/lib/uploads";
+import { parseCustomFieldDefs, type CustomFieldValue } from "@/server/products/custom-fields";
 
 export type CartActionState = { error?: string; success?: boolean };
+
+const MAX_CUSTOM_TEXT_LENGTH = 1000;
+
+/** يقرأ قيم الحقول المخصّصة من النموذج حسب تعريفها بالمنتج، ويرفع أي ملفات مرفقة. */
+async function readCustomFieldValues(formData: FormData, product: { customFields: unknown }): Promise<{ error: string } | { values: CustomFieldValue[] }> {
+  const defs = parseCustomFieldDefs(product.customFields);
+  const values: CustomFieldValue[] = [];
+
+  for (const def of defs) {
+    const raw = formData.get(`customField_${def.id}`);
+
+    if (def.type === "FILE") {
+      if (!(raw instanceof File) || raw.size === 0) {
+        if (def.required) return { error: `يرجى إرفاق ملف لحقل "${def.label}"` };
+        continue;
+      }
+      try {
+        const url = await saveUploadedFile(raw, "custom-fields");
+        values.push({ label: def.label, type: def.type, value: url });
+      } catch (e) {
+        return { error: e instanceof UploadError ? e.message : `تعذّر رفع الملف لحقل "${def.label}"` };
+      }
+    } else {
+      const text = String(raw ?? "").trim();
+      if (!text) {
+        if (def.required) return { error: `حقل "${def.label}" مطلوب` };
+        continue;
+      }
+      if (text.length > MAX_CUSTOM_TEXT_LENGTH) {
+        return { error: `حقل "${def.label}" أطول من الحد المسموح (${MAX_CUSTOM_TEXT_LENGTH} حرف)` };
+      }
+      values.push({ label: def.label, type: def.type, value: text });
+    }
+  }
+
+  return { values };
+}
 
 export async function addToCartAction(_prevState: CartActionState, formData: FormData): Promise<CartActionState> {
   const variantId = String(formData.get("variantId") ?? "");
@@ -16,7 +55,7 @@ export async function addToCartAction(_prevState: CartActionState, formData: For
 
   const variant = await db.productVariant.findUnique({
     where: { id: variantId },
-    include: { inventory: true, product: { select: { status: true, deletedAt: true } } },
+    include: { inventory: true, product: { select: { status: true, deletedAt: true, customFields: true } } },
   });
   if (!variant || !variant.isActive || variant.product.status !== "ACTIVE" || variant.product.deletedAt) {
     return { error: "هذا المنتج لم يعد متاحاً" };
@@ -25,6 +64,10 @@ export async function addToCartAction(_prevState: CartActionState, formData: For
   const available = Math.max(0, (variant.inventory?.onHand ?? 0) - (variant.inventory?.reserved ?? 0));
   if (available <= 0) return { error: "نفد المخزون من هذا المنتج" };
 
+  const customFieldsResult = await readCustomFieldValues(formData, variant.product);
+  if ("error" in customFieldsResult) return { error: customFieldsResult.error };
+  const customValues = customFieldsResult.values;
+
   const sessionId = await getOrCreateCartSessionId();
   const cart = await db.cart.upsert({
     where: { sessionId },
@@ -32,17 +75,25 @@ export async function addToCartAction(_prevState: CartActionState, formData: For
     update: { status: "ACTIVE" },
   });
 
-  const existing = await db.cartItem.findUnique({
-    where: { cartId_variantId: { cartId: cart.id, variantId } },
-  });
-  const nextQuantity = Math.min(available, (existing?.quantity ?? 0) + quantity);
-
-  if (existing) {
-    await db.cartItem.update({ where: { id: existing.id }, data: { quantity: nextQuantity } });
-  } else {
+  // منتجات بحقول مخصّصة (كرفع تصميم): كل إضافة سطر مستقل، لا يُدمَج مع
+  // إضافات سابقة لنفس الخيار حتى لا تُفقَد قيم/ملفات مختلفة بدمجها خطأً.
+  if (customValues.length > 0) {
     await db.cartItem.create({
-      data: { cartId: cart.id, productId: variant.productId, variantId, quantity: nextQuantity },
+      data: { cartId: cart.id, productId: variant.productId, variantId, quantity: Math.min(available, quantity), customValues },
     });
+  } else {
+    const existing = await db.cartItem.findFirst({
+      where: { cartId: cart.id, variantId, customValues: { equals: [] } },
+    });
+    const nextQuantity = Math.min(available, (existing?.quantity ?? 0) + quantity);
+
+    if (existing) {
+      await db.cartItem.update({ where: { id: existing.id }, data: { quantity: nextQuantity } });
+    } else {
+      await db.cartItem.create({
+        data: { cartId: cart.id, productId: variant.productId, variantId, quantity: nextQuantity },
+      });
+    }
   }
 
   revalidatePath("/cart");
