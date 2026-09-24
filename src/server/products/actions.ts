@@ -8,6 +8,7 @@ import { requireAdmin } from "@/server/auth/session";
 import { logAudit } from "@/server/audit/log";
 import { ProductStatus } from "@prisma/client";
 import type { CustomFieldDef, CustomFieldType } from "@/server/products/custom-fields";
+import { slugify, uniqueSlug } from "@/lib/slug";
 
 export type ProductFormState = {
   error?: string;
@@ -16,27 +17,7 @@ export type ProductFormState = {
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
-/** يحوّل الاسم العربي/اللاتيني إلى رابط صالح — يحافظ على الحروف والأرقام فقط. */
-function slugify(input: string): string {
-  const base = input
-    .trim()
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80);
-  return base || `product-${Date.now()}`;
-}
-
-async function uniqueSlug(base: string): Promise<string> {
-  let slug = base;
-  let i = 1;
-  // نطاق تكرار صغير متوقّع لكتالوج متجر واحد — يكفي فحص تسلسلي بسيط
-  while (await db.product.findUnique({ where: { slug }, select: { id: true } })) {
-    i += 1;
-    slug = `${base}-${i}`;
-  }
-  return slug;
-}
+const productSlugExists = async (slug: string) => Boolean(await db.product.findUnique({ where: { slug }, select: { id: true } }));
 
 type VariantInput = { id: string | null; nameAr: string; price: number; stock: number };
 
@@ -174,7 +155,7 @@ export async function createProductAction(
     }
   }
 
-  const slug = await uniqueSlug(slugify(parsed.nameAr));
+  const slug = await uniqueSlug(slugify(parsed.nameAr, "product"), productSlugExists);
   const skuBase = slug.toUpperCase().slice(0, 10);
 
   const variantsCreate = multiOption

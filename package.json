@@ -12,6 +12,8 @@
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:create-owner": "tsx prisma/create-owner.ts",
+    "db:apply-brand": "tsx prisma/apply-brand.ts",
+    "db:fresh-start": "tsx prisma/fresh-start.ts",
     "db:clear-demo": "tsx prisma/clear-demo-data.ts",
     "db:studio": "prisma studio",
     "db:migrate": "prisma migrate dev",

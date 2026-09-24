@@ -1,4 +1,5 @@
 import { db } from "@/server/db";
+import { THEME_DEFAULTS, normalizeSectionOrder, type ThemeSettings } from "@/lib/theme";
 
 /**
  * طبقة الإعدادات — تخزين مفتاح/قيمة في جدول Setting (JSON) بدل ترحيل
@@ -74,11 +75,11 @@ export type StoreInfoSettings = {
 };
 
 const STORE_INFO_DEFAULTS: StoreInfoSettings = {
-  name: "فنجان",
-  tagline: "قهوة مختصة وماتشا فاخرة",
+  name: "الورقة الذهبية",
+  tagline: "حلول طباعة احترافية بجودة ذهبية",
   phone: "",
   email: "",
-  logoUrl: "",
+  logoUrl: "/brand/mark.png",
 };
 
 export function getStoreInfoSettings() {
@@ -101,18 +102,34 @@ export type HeroContentSettings = {
   secondaryCtaHref: string;
   /** صورة بانر مخصّصة — إن كانت فارغة يُستخدم أحدث منتج مميّز تلقائياً */
   imageUrl: string;
+  /** المنتج في البطاقة العائمة: "" = تلقائي، HERO_PRODUCT_HIDDEN = إخفاء، أو رابط (slug) منتج محدد */
+  floatingProductSlug: string;
+  /** شارة الثقة العائمة (مثل "+2,400 عميل") — فارغة = إخفاء الشارة */
+  badgeText: string;
+  /** إحصائيتان أسفل الأزرار — قيمة فارغة = إخفاء تلك الإحصائية. عدد المنتجات يُحسب تلقائياً دائماً */
+  stat1Value: string;
+  stat1Label: string;
+  stat2Value: string;
+  stat2Label: string;
 };
 
 const HERO_DEFAULTS: HeroContentSettings = {
-  eyebrow: "تحميص جديد كل أسبوع",
-  headline: "فنجانك المثالي",
-  headlineHighlight: "يبدأ من هنا",
-  subtitle: "قهوة مختصة تُحمَّص طازجة وماتشا يابانية فاخرة، مع أدوات تحضير مختارة بعناية — كل ما تحتاجه لتحضير فنجانك في بيتك.",
-  ctaText: "تسوّق القهوة",
-  ctaHref: "/c/coffee-beans",
-  secondaryCtaText: "اكتشف الماتشا",
-  secondaryCtaHref: "/c/matcha",
+  eyebrow: "جودة طباعة ذهبية",
+  headline: "اطبع أفكارك",
+  headlineHighlight: "بلمسة ذهبية",
+  subtitle: "ستيكرات، كروت أعمال ومطبوعات بجودة عالية — ارفع تصميمك واطلب بسهولة، ونوصّل لجميع مدن المملكة.",
+  ctaText: "تسوّق المنتجات",
+  ctaHref: "/products",
+  secondaryCtaText: "",
+  secondaryCtaHref: "/products",
   imageUrl: "",
+  floatingProductSlug: "",
+  // أرقام الثقة فارغة افتراضياً — لا نعرض إحصائيات لم يُدخلها صاحب المتجر بنفسه
+  badgeText: "",
+  stat1Value: "",
+  stat1Label: "عميل سعيد",
+  stat2Value: "",
+  stat2Label: "متوسط التقييم",
 };
 
 export function getHeroContent() {
@@ -176,6 +193,15 @@ const HOMEPAGE_SECTIONS_DEFAULTS: HomepageSectionsSettings = {
   arrivals: true,
   finalCta: true,
 };
+
+export async function getThemeSettings(): Promise<ThemeSettings> {
+  const theme = await getSetting<ThemeSettings>("theme.storefront", THEME_DEFAULTS);
+  return { ...theme, sectionOrder: normalizeSectionOrder(theme.sectionOrder) };
+}
+
+export function saveThemeSettings(value: ThemeSettings) {
+  return setSetting("theme.storefront", value);
+}
 
 export function getHomepageSections() {
   return getSetting<HomepageSectionsSettings>("content.homepageSections", HOMEPAGE_SECTIONS_DEFAULTS);

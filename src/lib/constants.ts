@@ -1,4 +1,4 @@
-export const STORE_NAME = process.env.NEXT_PUBLIC_STORE_NAME ?? "فنجان";
+export const STORE_NAME = process.env.NEXT_PUBLIC_STORE_NAME ?? "الورقة الذهبية";
 export const CURRENCY = process.env.NEXT_PUBLIC_CURRENCY ?? "SAR";
 export const TAX_RATE = Number(process.env.TAX_RATE ?? "0.15");
 /** رابط الموقع الأساسي بلا / زائدة — يُستخدم في السايت ماب وروبوتس والبيانات المهيكلة وتغذية قوقل. */

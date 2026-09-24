@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { db } from "@/server/db";
 import { StoreLogo } from "@/components/StoreLogo";
-import { getStoreInfoSettings } from "@/server/settings";
+import { getStoreInfoSettings, getThemeSettings } from "@/server/settings";
 import { getCartItemCount } from "@/server/cart/queries";
 
 const ICON = "h-5 w-5 stroke-current";
 
 export async function Header() {
-  const [categories, storeInfo, cartCount] = await Promise.all([
+  const [categories, storeInfo, cartCount, theme] = await Promise.all([
     db.category.findMany({
       where: { isActive: true, parentId: null },
       orderBy: { position: "asc" },
@@ -15,16 +15,17 @@ export async function Header() {
     }),
     getStoreInfoSettings(),
     getCartItemCount(),
+    getThemeSettings(),
   ]);
 
   return (
     <header className="sticky top-0 z-40 border-b bg-[var(--surface-raised)]/85 backdrop-blur-md">
-      {/* شريط الإعلان العلوي */}
-      <div className="bg-brand-800 text-center text-[13px] text-brand-50">
-        <p className="mx-auto max-w-7xl px-4 py-2">
-          حبوب تُحمَّص أسبوعياً · شحن مجاني للطلبات فوق <span className="num font-semibold">200</span> ر.س
-        </p>
-      </div>
+      {/* شريط الإعلان العلوي — نصه من الثيم، ويختفي إن كان فارغاً */}
+      {theme.announcement && (
+        <div className="bg-brand-800 text-center text-[13px] text-brand-50">
+          <p className="mx-auto max-w-7xl px-4 py-2">{theme.announcement}</p>
+        </div>
+      )}
 
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4">
         <Link href="/" className="flex shrink-0 items-center gap-2.5">
@@ -69,7 +70,7 @@ export async function Header() {
               <path d="M9 10V6a3 3 0 0 1 6 0v4" strokeLinecap="round" />
             </svg>
             {cartCount > 0 && (
-              <span className="num absolute -top-0.5 end-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-accent-500 px-1 text-[11px] font-bold text-white">
+              <span className="num absolute -top-0.5 end-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-accent-500 px-1 text-[11px] font-bold text-on-accent">
                 {cartCount}
               </span>
             )}

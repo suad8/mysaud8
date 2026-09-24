@@ -7,30 +7,32 @@
   /* ── الخطوط ─────────────────────────────────────────────── */
   --font-sans: var(--font-arabic), ui-sans-serif, system-ui, sans-serif;
 
-  /* ── هوية العلامة: بنفسجي عصري ──────────────────────────── */
-  --color-brand-50:  #f5f2ff;
-  --color-brand-100: #ece4ff;
-  --color-brand-200: #dbceff;
-  --color-brand-300: #c1a8ff;
-  --color-brand-400: #a179fb;
-  --color-brand-500: #8654f0;
-  --color-brand-600: #7239dd;
-  --color-brand-700: #5f2cb8;
-  --color-brand-800: #4d2696;
-  --color-brand-900: #3f2178;
-  --color-brand-950: #241340;
+  /* ── هوية الورقة الذهبية: بنفسجي العلامة (#663DFF) ─────── */
+  --color-brand-50:  #f0f1ff;
+  --color-brand-100: #e4e6ff;
+  --color-brand-200: #c9ccff;
+  --color-brand-300: #acacff;
+  --color-brand-400: #8d87ff;
+  --color-brand-500: #7562ff;
+  --color-brand-600: #663dff;
+  --color-brand-700: #4f2eca;
+  --color-brand-800: #3c229e;
+  --color-brand-900: #3a236a;
+  --color-brand-950: #1f1340;
 
-  /* ── لون التمييز: وردي/أرجواني لأزرار الدعوة للإجراء ─────── */
-  --color-accent-50:  #fef1f8;
-  --color-accent-100: #fde3f2;
-  --color-accent-200: #fbc7e6;
-  --color-accent-300: #f79cd1;
-  --color-accent-400: #f166b5;
-  --color-accent-500: #e83e9a;
-  --color-accent-600: #cf2382;
-  --color-accent-700: #ab1a6a;
-  --color-accent-800: #8c1a59;
-  --color-accent-900: #74194c;
+  /* ── الذهبي (#FFC430) لأزرار الدعوة للإجراء والشارات ───────── */
+  --color-accent-50:  #fffbf1;
+  --color-accent-100: #fff7e6;
+  --color-accent-200: #ffeecc;
+  --color-accent-300: #ffe3a8;
+  --color-accent-400: #ffd477;
+  --color-accent-500: #ffc430;
+  --color-accent-600: #d7a527;
+  --color-accent-700: #ab821d;
+  --color-accent-800: #866614;
+  --color-accent-900: #694f0d;
+  /* لون النص فوق الذهبي — الذهبي فاتح فالنص الأبيض عليه غير مقروء */
+  --color-on-accent: #3a236a;
 
   /* ── رماديات باردة بميلان بنفسجي خفيف ───────────────────── */
   --color-ink-50:  #f7f7fb;

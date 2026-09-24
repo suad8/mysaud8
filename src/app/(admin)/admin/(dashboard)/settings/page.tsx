@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { Topbar } from "@/components/admin/Topbar";
 import { Button } from "@/components/ui/Button";
-import { HeroBannerForm } from "@/components/admin/HeroBannerForm";
 import { StoreInfoForm } from "@/components/admin/StoreInfoForm";
 import { ChangePasswordForm } from "@/components/admin/ChangePasswordForm";
 import { AdminUsersManager } from "@/components/admin/AdminUsersManager";
@@ -9,8 +8,8 @@ import { SeoMarketingForm } from "@/components/admin/SeoMarketingForm";
 import { db } from "@/server/db";
 import { getSession } from "@/server/auth/session";
 import { AdminRole } from "@prisma/client";
-import { getBankTransferSettings, getHeroContent, getHomepageSections, getMoyasarSettings, getSeoMarketingSettings, getStoreInfoSettings, maskSecret } from "@/server/settings";
-import { updateBankSettingsAction, updateGatewaySettingsAction, updateHomepageSectionsAction } from "@/server/settings/actions";
+import { getBankTransferSettings, getMoyasarSettings, getSeoMarketingSettings, getStoreInfoSettings, maskSecret } from "@/server/settings";
+import { updateBankSettingsAction, updateGatewaySettingsAction } from "@/server/settings/actions";
 import { CURRENCY, SITE_URL, TAX_RATE } from "@/lib/constants";
 
 const CURRENCY_LABEL = CURRENCY === "SAR" ? "ريال سعودي (SAR)" : CURRENCY;
@@ -65,13 +64,11 @@ export default async function AdminSettingsPage() {
   const session = await getSession();
   if (!session) redirect("/admin/login");
 
-  const [bank, gateway, storeInfo, hero, seo, homepageSections, users] = await Promise.all([
+  const [bank, gateway, storeInfo, seo, users] = await Promise.all([
     getBankTransferSettings(),
     getMoyasarSettings(),
     getStoreInfoSettings(),
-    getHeroContent(),
     getSeoMarketingSettings(),
-    getHomepageSections(),
     db.adminUser.findMany({
       orderBy: { lastLoginAt: "desc" },
       select: { id: true, name: true, email: true, role: true, isActive: true, lastLoginAt: true },
@@ -86,27 +83,10 @@ export default async function AdminSettingsPage() {
           <StoreInfoForm info={storeInfo} />
         </Section>
 
-        <Section title="بانر الصفحة الرئيسية" desc="يظهر مباشرة أعلى المتجر — الصورة والنصوص والأزرار.">
-          <HeroBannerForm hero={hero} />
+        <Section title="التصميم والمحتوى" desc="البانر، الألوان، أقسام الصفحة الرئيسية، والفوتر.">
+          <p className="text-sm text-muted">انتقلت كل إعدادات تصميم المتجر إلى صفحة مستقلة.</p>
+          <Button href="/admin/theme" size="sm" variant="secondary">فتح صفحة الثيم ←</Button>
         </Section>
-
-        <form action={updateHomepageSectionsAction} className="lg:col-span-2">
-          <Section title="أقسام الصفحة الرئيسية" desc="تحكّم بإظهار أو إخفاء أي قسم من تصميم المتجر مباشرة — دون حذف بياناته.">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <ToggleRow name="hero" label="البانر الرئيسي" defaultChecked={homepageSections.hero} />
-              <ToggleRow name="trustBar" label="شريط الثقة (شحن، دفع، ضمان)" defaultChecked={homepageSections.trustBar} />
-              <ToggleRow name="categories" label="التصنيفات" defaultChecked={homepageSections.categories} />
-              <ToggleRow name="featured" label="المنتجات المميزة" defaultChecked={homepageSections.featured} />
-              <ToggleRow name="bundle" label="بندل العرض الترويجي" defaultChecked={homepageSections.bundle} />
-              <ToggleRow name="testimonials" label="آراء العملاء" defaultChecked={homepageSections.testimonials} />
-              <ToggleRow name="arrivals" label="وصل حديثاً" defaultChecked={homepageSections.arrivals} />
-              <ToggleRow name="finalCta" label="دعوة الإجراء الأخيرة" defaultChecked={homepageSections.finalCta} />
-            </div>
-            <div className="flex justify-end">
-              <Button type="submit" size="sm">حفظ أقسام الصفحة</Button>
-            </div>
-          </Section>
-        </form>
 
         <Section title="الضريبة والعملة">
           <Field name="taxRate" label="نسبة ضريبة القيمة المضافة" defaultValue={`${(TAX_RATE * 100).toFixed(0)}`} unit="%" disabled />
@@ -139,7 +119,7 @@ export default async function AdminSettingsPage() {
             <ToggleRow name="enabled" label="تفعيل الدفع بالتحويل البنكي" defaultChecked={bank.enabled} />
             <div className="grid gap-4 sm:grid-cols-2">
               <Field name="bankName" label="اسم البنك" defaultValue={bank.bankName} placeholder="مثال: البنك الأهلي السعودي" />
-              <Field name="accountName" label="اسم صاحب الحساب" defaultValue={bank.accountName} placeholder="مثال: شركة فنجان للتجارة" />
+              <Field name="accountName" label="اسم صاحب الحساب" defaultValue={bank.accountName} placeholder="مثال: شركة الورقة الذهبية للطباعة" />
               <Field name="iban" label="رقم الآيبان (IBAN)" defaultValue={bank.iban} placeholder="SA00 0000 0000 0000 0000 0000" className="num" />
               <Field name="accountNumber" label="رقم الحساب" defaultValue={bank.accountNumber} className="num" />
             </div>

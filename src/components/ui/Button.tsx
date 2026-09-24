@@ -6,7 +6,7 @@ const VARIANTS = {
     "bg-brand-700 text-white hover:bg-brand-800 active:bg-brand-900 shadow-sm dark:bg-brand-600 dark:hover:bg-brand-500",
   secondary:
     "bg-[var(--surface-raised)] text-[var(--text-strong)] ring-1 ring-inset ring-[var(--border-subtle)] hover:bg-ink-100 dark:hover:bg-ink-800",
-  accent: "bg-accent-500 text-white hover:bg-accent-600 active:bg-accent-700 shadow-sm",
+  accent: "bg-accent-500 text-on-accent hover:bg-accent-400 active:bg-accent-600 shadow-sm",
   ghost: "text-[var(--text-strong)] hover:bg-ink-100 dark:hover:bg-ink-800",
   danger: "bg-red-600 text-white hover:bg-red-700",
 } as const;

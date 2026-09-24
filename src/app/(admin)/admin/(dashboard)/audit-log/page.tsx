@@ -40,6 +40,15 @@ const ACTION_LABEL: Record<string, string> = {
   "shipment.updated": "تحديث بيانات شحنة",
   "review.approved": "اعتماد تقييم",
   "review.deleted": "حذف تقييم",
+  "theme.updated": "تحديث الثيم",
+  "category.created": "إنشاء تصنيف",
+  "category.updated": "تعديل تصنيف",
+  "category.deleted": "حذف تصنيف",
+  "page.created": "إنشاء صفحة",
+  "page.defaultsCreated": "إنشاء الصفحات الأساسية",
+  "page.updated": "تعديل صفحة",
+  "page.deleted": "حذف صفحة",
+  "newsletter.subscriberDeleted": "حذف مشترك من النشرة",
 };
 
 const ACTION_TONE: Record<string, BadgeTone> = {
@@ -54,6 +63,8 @@ const ACTION_TONE: Record<string, BadgeTone> = {
   "payment.confirmed": "green",
   "payment.rejected": "red",
   "order.cancelled": "red",
+  "category.deleted": "red",
+  "page.deleted": "red",
 };
 
 export default async function AdminAuditLogPage() {

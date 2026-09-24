@@ -2,7 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Cairo } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
-import { getSeoMarketingSettings, getStoreInfoSettings } from "@/server/settings";
+import { getSeoMarketingSettings, getStoreInfoSettings, getThemeSettings } from "@/server/settings";
+import { themeColorCss } from "@/lib/theme";
 import { SITE_URL } from "@/lib/constants";
 
 // خط عريض مدوّر — يمنح العناوين طابعاً عصرياً واثقاً يناسب متجر منتجات.
@@ -20,8 +21,7 @@ const arabic = Cairo({
 // عند كل طلب بدل تجميدها وقت البناء.
 export const dynamic = "force-dynamic";
 
-const DEFAULT_DESCRIPTION =
-  "قهوة مختصة تُحمَّص طازجة وماتشا يابانية فاخرة، مع أدوات تحضير مختارة بعناية — توصيل لكل مدن المملكة.";
+const DEFAULT_DESCRIPTION = "طباعة احترافية لستيكرات وكروت الأعمال والمطبوعات — توصيل لجميع مدن المملكة.";
 
 export async function generateMetadata(): Promise<Metadata> {
   const [storeInfo, seo] = await Promise.all([getStoreInfoSettings(), getSeoMarketingSettings()]);
@@ -58,10 +58,13 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const seo = await getSeoMarketingSettings();
+  const [seo, theme] = await Promise.all([getSeoMarketingSettings(), getThemeSettings()]);
+  // ألوان الثيم المخصّصة — قيم hex مُتحقَّق منها قبل إدراجها، وتُحذف كلياً عند استخدام الافتراضية
+  const themeCss = themeColorCss(theme.primaryColor, theme.accentColor);
 
   return (
     <html lang="ar" dir="rtl" className={arabic.variable}>
+      <head>{themeCss && <style dangerouslySetInnerHTML={{ __html: themeCss }} />}</head>
       <body className="min-h-dvh font-sans">
         {children}
 

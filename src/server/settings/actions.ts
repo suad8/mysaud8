@@ -4,17 +4,16 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/server/auth/session";
 import { logAudit } from "@/server/audit/log";
 import { saveUploadedFile, UploadError } from "@/lib/uploads";
+import { safeHref } from "@/lib/theme";
 import {
   getHeroContent,
   getMoyasarSettings,
   getStoreInfoSettings,
   saveBankTransferSettings,
   saveHeroContent,
-  saveHomepageSections,
   saveMoyasarSettings,
   saveSeoMarketingSettings,
   saveStoreInfoSettings,
-  type HomepageSectionsSettings,
 } from "@/server/settings";
 
 export async function updateBankSettingsAction(formData: FormData) {
@@ -115,14 +114,20 @@ export async function updateHeroContentAction(
     headlineHighlight: String(formData.get("headlineHighlight") ?? "").trim(),
     subtitle: String(formData.get("subtitle") ?? "").trim(),
     ctaText: String(formData.get("ctaText") ?? "").trim(),
-    ctaHref: String(formData.get("ctaHref") ?? "").trim() || "/",
+    ctaHref: safeHref(String(formData.get("ctaHref") ?? "")),
     secondaryCtaText: String(formData.get("secondaryCtaText") ?? "").trim(),
-    secondaryCtaHref: String(formData.get("secondaryCtaHref") ?? "").trim() || "/",
+    secondaryCtaHref: safeHref(String(formData.get("secondaryCtaHref") ?? "")),
     imageUrl,
+    floatingProductSlug: String(formData.get("floatingProductSlug") ?? "").trim(),
+    badgeText: String(formData.get("badgeText") ?? "").trim(),
+    stat1Value: String(formData.get("stat1Value") ?? "").trim(),
+    stat1Label: String(formData.get("stat1Label") ?? "").trim(),
+    stat2Value: String(formData.get("stat2Value") ?? "").trim(),
+    stat2Label: String(formData.get("stat2Label") ?? "").trim(),
   });
   await logAudit({ actorId: session.sub, action: "settings.hero.updated", entity: "Setting", entityId: "content.hero" });
 
-  revalidatePath("/admin/settings");
+  revalidatePath("/admin/theme");
   revalidatePath("/");
   return {};
 }
@@ -156,20 +161,4 @@ export async function updateSeoMarketingAction(
   revalidatePath("/admin/settings");
   revalidatePath("/", "layout");
   return {};
-}
-
-const HOMEPAGE_SECTION_KEYS = ["hero", "trustBar", "categories", "featured", "bundle", "testimonials", "arrivals", "finalCta"] as const;
-
-export async function updateHomepageSectionsAction(formData: FormData) {
-  const session = await requireAdmin();
-
-  const value = Object.fromEntries(
-    HOMEPAGE_SECTION_KEYS.map((key) => [key, formData.get(key) === "on"]),
-  ) as HomepageSectionsSettings;
-
-  await saveHomepageSections(value);
-  await logAudit({ actorId: session.sub, action: "settings.homepageSections.updated", entity: "Setting", entityId: "content.homepageSections", diff: value });
-
-  revalidatePath("/admin/settings");
-  revalidatePath("/");
 }

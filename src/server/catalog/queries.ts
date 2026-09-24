@@ -51,6 +51,40 @@ export async function getFeaturedProducts(limit = 8): Promise<ProductCardData[]>
   return rows.map(toCard);
 }
 
+const ALL_PRODUCTS_PAGE_SIZE = 24;
+
+export async function getAllProducts(opts: { sort?: string; page?: number } = {}) {
+  const page = Math.max(1, Math.floor(opts.page ?? 1));
+  const orderBy: Prisma.ProductOrderByWithRelationInput =
+    opts.sort === "price-asc" ? { basePrice: "asc" } : opts.sort === "price-desc" ? { basePrice: "desc" } : { createdAt: "desc" };
+
+  const [rows, total] = await Promise.all([
+    db.product.findMany({
+      where: LIVE,
+      select: cardSelect,
+      orderBy,
+      skip: (page - 1) * ALL_PRODUCTS_PAGE_SIZE,
+      take: ALL_PRODUCTS_PAGE_SIZE,
+    }),
+    db.product.count({ where: LIVE }),
+  ]);
+  return { products: rows.map(toCard), total, page, pageCount: Math.max(1, Math.ceil(total / ALL_PRODUCTS_PAGE_SIZE)) };
+}
+
+export async function getProductCardBySlug(slug: string): Promise<ProductCardData | null> {
+  const row = await db.product.findFirst({ where: { ...LIVE, slug }, select: cardSelect });
+  return row ? toCard(row) : null;
+}
+
+/** قائمة مختصرة بالمنتجات المنشورة — لقوائم الاختيار في لوحة التحكم. */
+export async function getActiveProductOptions(): Promise<{ slug: string; nameAr: string }[]> {
+  return db.product.findMany({
+    where: LIVE,
+    select: { slug: true, nameAr: true },
+    orderBy: { nameAr: "asc" },
+  });
+}
+
 export async function getNewArrivals(limit = 8): Promise<ProductCardData[]> {
   const rows = await db.product.findMany({
     where: LIVE,

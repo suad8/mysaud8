@@ -5,16 +5,24 @@ import { SITE_URL } from "@/lib/constants";
 export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [categories, products] = await Promise.all([
+  const [categories, products, pages] = await Promise.all([
     db.category.findMany({ where: { isActive: true }, select: { slug: true, updatedAt: true } }),
     db.product.findMany({
       where: { status: "ACTIVE", deletedAt: null },
       select: { slug: true, updatedAt: true },
     }),
+    db.page.findMany({ where: { isPublished: true }, select: { slug: true, updatedAt: true } }),
   ]);
 
   return [
     { url: SITE_URL, lastModified: new Date(), changeFrequency: "daily", priority: 1 },
+    { url: `${SITE_URL}/products`, lastModified: new Date(), changeFrequency: "daily", priority: 0.9 },
+    ...pages.map((p) => ({
+      url: `${SITE_URL}/pages/${encodeURIComponent(p.slug)}`,
+      lastModified: p.updatedAt,
+      changeFrequency: "monthly" as const,
+      priority: 0.4,
+    })),
     ...categories.map((c) => ({
       url: `${SITE_URL}/c/${encodeURIComponent(c.slug)}`,
       lastModified: c.updatedAt,

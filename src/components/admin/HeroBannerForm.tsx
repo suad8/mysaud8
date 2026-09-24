@@ -5,8 +5,15 @@ import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import { updateHeroContentAction } from "@/server/settings/actions";
 import type { HeroContentSettings } from "@/server/settings";
+import { HERO_PRODUCT_HIDDEN } from "@/lib/theme";
 
-export function HeroBannerForm({ hero }: { hero: HeroContentSettings }) {
+export function HeroBannerForm({
+  hero,
+  products,
+}: {
+  hero: HeroContentSettings;
+  products: { slug: string; nameAr: string }[];
+}) {
   const [state, formAction, isPending] = useActionState(updateHeroContentAction, {});
   const [imageName, setImageName] = useState<string | null>(null);
 
@@ -83,6 +90,36 @@ export function HeroBannerForm({ hero }: { hero: HeroContentSettings }) {
           <span className="mb-1.5 block font-medium text-muted">رابط الزر الثانوي</span>
           <input name="secondaryCtaHref" defaultValue={hero.secondaryCtaHref} dir="ltr" className="num h-11 w-full rounded-xl border bg-transparent px-3.5 outline-none focus:ring-2 focus:ring-brand-500/40" />
         </label>
+      </div>
+
+      <label className="block text-sm">
+        <span className="mb-1.5 block font-medium text-muted">المنتج في البطاقة الصغيرة العائمة</span>
+        <select
+          name="floatingProductSlug"
+          defaultValue={hero.floatingProductSlug}
+          className="h-11 w-full rounded-xl border bg-transparent px-3 outline-none focus:ring-2 focus:ring-brand-500/40"
+        >
+          <option value="">تلقائي (من المنتجات المميّزة)</option>
+          <option value={HERO_PRODUCT_HIDDEN}>إخفاء البطاقة</option>
+          {products.map((p) => (
+            <option key={p.slug} value={p.slug}>{p.nameAr}</option>
+          ))}
+        </select>
+      </label>
+
+      <label className="block text-sm">
+        <span className="mb-1.5 block font-medium text-muted">شارة الثقة العائمة (اتركها فارغة للإخفاء)</span>
+        <input name="badgeText" defaultValue={hero.badgeText} placeholder="مثال: +500 عميل" className="h-11 w-full rounded-xl border bg-transparent px-3.5 outline-none focus:ring-2 focus:ring-brand-500/40" />
+      </label>
+
+      <div>
+        <span className="mb-1.5 block text-sm font-medium text-muted">الإحصائيات أسفل الأزرار (اترك القيمة فارغة للإخفاء — عدد المنتجات يُحسب تلقائياً)</span>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <input name="stat1Value" defaultValue={hero.stat1Value} placeholder="القيمة (مثال: +500)" className="num h-11 w-full rounded-xl border bg-transparent px-3.5 text-sm outline-none focus:ring-2 focus:ring-brand-500/40" />
+          <input name="stat1Label" defaultValue={hero.stat1Label} placeholder="الوصف (مثال: عميل سعيد)" className="h-11 w-full rounded-xl border bg-transparent px-3.5 text-sm outline-none focus:ring-2 focus:ring-brand-500/40" />
+          <input name="stat2Value" defaultValue={hero.stat2Value} placeholder="القيمة (مثال: 4.9)" className="num h-11 w-full rounded-xl border bg-transparent px-3.5 text-sm outline-none focus:ring-2 focus:ring-brand-500/40" />
+          <input name="stat2Label" defaultValue={hero.stat2Label} placeholder="الوصف (مثال: متوسط التقييم)" className="h-11 w-full rounded-xl border bg-transparent px-3.5 text-sm outline-none focus:ring-2 focus:ring-brand-500/40" />
+        </div>
       </div>
 
       <div className="flex justify-end">

@@ -7,7 +7,7 @@ import { ProductCard } from "@/components/storefront/ProductCard";
 import { ProductPurchasePanel } from "@/components/storefront/ProductPurchasePanel";
 import { ReviewForm } from "@/components/storefront/ReviewForm";
 import { getProductBySlug, getRelatedProducts } from "@/server/catalog/queries";
-import { getStoreInfoSettings } from "@/server/settings";
+import { getStoreInfoSettings, getThemeSettings } from "@/server/settings";
 import { parseCustomFieldDefs } from "@/server/products/custom-fields";
 import { decodeSlug } from "@/lib/route-params";
 import { formatDate } from "@/lib/format";
@@ -72,8 +72,9 @@ function buildProductJsonLd(
 
 export default async function ProductPage({ params }: Props) {
   const slug = decodeSlug((await params).slug);
-  const [product, storeInfo] = await Promise.all([getProductBySlug(slug), getStoreInfoSettings()]);
+  const [product, storeInfo, theme] = await Promise.all([getProductBySlug(slug), getStoreInfoSettings(), getThemeSettings()]);
   if (!product) notFound();
+  const productTrust = theme.productTrust.filter((item) => item.title);
 
   const related = await getRelatedProducts(product.categoryId, slug);
   const totalAvailable = product.variants.reduce((s, v) => s + v.available, 0);
@@ -138,18 +139,16 @@ export default async function ProductPage({ params }: Props) {
             />
           </div>
 
-          <div className="mt-8 grid grid-cols-3 gap-3 border-t pt-6 text-center">
-            {[
-              ["شحن", "1–3 أيام"],
-              ["إرجاع", "خلال 14 يوماً"],
-              ["الدفع", "آمن 100%"],
-            ].map(([t, d]) => (
-              <div key={t}>
-                <p className="text-xs font-semibold">{t}</p>
-                <p className="mt-0.5 text-[11px] text-muted">{d}</p>
-              </div>
-            ))}
-          </div>
+          {productTrust.length > 0 && (
+            <div className="mt-8 grid grid-cols-3 gap-3 border-t pt-6 text-center">
+              {productTrust.map((item) => (
+                <div key={item.title}>
+                  <p className="text-xs font-semibold">{item.title}</p>
+                  <p className="mt-0.5 text-[11px] text-muted">{item.desc}</p>
+                </div>
+              ))}
+            </div>
+          )}
 
           {product.descAr && (
             <div className="mt-8 border-t pt-6">
