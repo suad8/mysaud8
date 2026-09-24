@@ -6,10 +6,12 @@ import { Price } from "@/components/ui/Price";
 import { db } from "@/server/db";
 import { ORDER_STATUS, type OrderStatusKey } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
+import { requireAdminPage } from "@/server/auth/session";
 
 type Props = { params: Promise<{ id: string }> };
 
 export default async function AdminCustomerDetailPage({ params }: Props) {
+  await requireAdminPage();
   const { id } = await params;
   const customer = await db.customer.findUnique({
     where: { id },

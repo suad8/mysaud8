@@ -37,7 +37,7 @@ export function ChangePasswordForm() {
             type="password"
             name="newPassword"
             required
-            minLength={8}
+            minLength={12}
             autoComplete="new-password"
             className="h-11 w-full rounded-xl border bg-transparent px-3.5 outline-none focus:ring-2 focus:ring-brand-500/40"
           />
@@ -48,13 +48,13 @@ export function ChangePasswordForm() {
             type="password"
             name="confirmPassword"
             required
-            minLength={8}
+            minLength={12}
             autoComplete="new-password"
             className="h-11 w-full rounded-xl border bg-transparent px-3.5 outline-none focus:ring-2 focus:ring-brand-500/40"
           />
         </label>
       </div>
-      <p className="text-[11px] text-muted">8 أحرف على الأقل. غيّر كلمة المرور الافتراضية فور أول دخول.</p>
+      <p className="text-[11px] text-muted">12 حرفاً على الأقل. تغييرها يُنهي جلسات الدخول المفتوحة على الأجهزة الأخرى.</p>
       <div className="flex justify-end">
         <Button type="submit" size="sm" disabled={isPending}>
           {isPending ? "جارٍ الحفظ…" : "تغيير كلمة المرور"}

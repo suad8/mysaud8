@@ -6,6 +6,7 @@ import { Price } from "@/components/ui/Price";
 import { getDashboardStats } from "@/server/reports/dashboard";
 import { ORDER_STATUS, type OrderStatusKey } from "@/lib/constants";
 import { formatNumber, formatRelative } from "@/lib/format";
+import { requireAdminPage } from "@/server/auth/session";
 
 function SalesChart({ data }: { data: { date: string; total: number }[] }) {
   const max = Math.max(...data.map((d) => d.total), 1);
@@ -31,6 +32,7 @@ function SalesChart({ data }: { data: { date: string; total: number }[] }) {
 }
 
 export default async function AdminDashboard() {
+  await requireAdminPage();
   const stats = await getDashboardStats();
 
   return (

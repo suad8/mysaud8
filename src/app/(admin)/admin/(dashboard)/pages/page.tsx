@@ -5,10 +5,12 @@ import { Badge } from "@/components/ui/Badge";
 import { db } from "@/server/db";
 import { formatDate, formatNumber } from "@/lib/format";
 import { createDefaultPagesAction, createPageAction } from "@/server/pages/actions";
+import { requireAdminPage } from "@/server/auth/session";
 
 const DEFAULT_SLUGS = ["about", "shipping", "returns", "privacy", "terms", "contact"];
 
 export default async function AdminPagesPage() {
+  await requireAdminPage();
   const pages = await db.page.findMany({ orderBy: { createdAt: "asc" } });
   const missingDefaults = DEFAULT_SLUGS.filter((s) => !pages.some((p) => p.slug === s));
 

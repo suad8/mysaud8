@@ -5,6 +5,7 @@ import { Price } from "@/components/ui/Price";
 import { db } from "@/server/db";
 import { ORDER_STATUS, type OrderStatusKey } from "@/lib/constants";
 import { formatDateTime, formatNumber } from "@/lib/format";
+import { requireAdminPage } from "@/server/auth/session";
 
 const FILTERS: { key: OrderStatusKey | "ALL"; label: string }[] = [
   { key: "ALL", label: "الكل" },
@@ -20,6 +21,7 @@ export default async function AdminOrdersPage({
 }: {
   searchParams: Promise<{ status?: string }>;
 }) {
+  await requireAdminPage();
   const { status } = await searchParams;
   const where = status && status !== "ALL" ? { status: status as OrderStatusKey } : {};
 

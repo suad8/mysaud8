@@ -2,8 +2,10 @@ import { Topbar } from "@/components/admin/Topbar";
 import { ShippingZonesManager } from "@/components/admin/ShippingZonesManager";
 import { db } from "@/server/db";
 import { formatNumber } from "@/lib/format";
+import { requireAdminPage } from "@/server/auth/session";
 
 export default async function AdminShippingPage() {
+  await requireAdminPage();
   const zones = await db.shippingZone.findMany({
     orderBy: { createdAt: "asc" },
     include: { rates: { orderBy: { price: "asc" } } },

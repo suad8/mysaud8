@@ -1,4 +1,4 @@
-import { writeFile, mkdir } from "node:fs/promises";
+import { writeFile, mkdir, unlink } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -80,4 +80,11 @@ export async function saveUploadedFile(file: File, subdir: string): Promise<stri
   await writeFile(path.join(dir, filename), buffer);
 
   return `/api/uploads/${subdir}/${filename}`;
+}
+
+/** يحذف ملفاً رُفع بـ saveUploadedFile (مثلاً عند فشل إنشاء الطلب بعد حفظ الإيصال). لا يرمي أخطاء. */
+export async function deleteUploadedFile(url: string): Promise<void> {
+  const match = /^\/api\/uploads\/([a-z-]+)\/(\d+-[a-f0-9]+\.[a-z]+)$/.exec(url);
+  if (!match) return;
+  await unlink(path.join(process.cwd(), "public", "uploads", match[1]!, match[2]!)).catch(() => {});
 }

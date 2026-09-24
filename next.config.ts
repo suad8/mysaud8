@@ -44,9 +44,19 @@ const securityHeaders = [
 
 const config: NextConfig = {
   reactStrictMode: true,
+  // لا نكشف إطار العمل ونسخته في ترويسة X-Powered-By
+  poweredByHeader: false,
+  experimental: {
+    serverActions: {
+      // الحد الافتراضي 1MB يرفض صور الإيصالات/التصاميم الملتقطة بالجوال (حد الملف الواحد 5MB)
+      bodySizeLimit: "12mb",
+    },
+  },
   images: {
-    // صور المنتجات المُولَّدة SVG محلية — next/image يتطلب هذا الإذن صراحة
+    // صور SVG محلية فقط (public/) — next/image يتطلب هذا الإذن صراحة، مع
+    // عزل أي SVG يُعرض عبر محسّن الصور بلا سكربتات (توصية Next.js)
     dangerouslyAllowSVG: true,
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
     contentDispositionType: "inline",
     // لا نحتاج تحميل صور من نطاقات خارجية حالياً — تركها بلا قيود
     // (hostname: "**") يفتح الباب لاستغلال محسّن الصور كوسيط SSRF.

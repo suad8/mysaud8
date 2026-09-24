@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { assertDestructiveAllowed } from "./guard";
 
 const db = new PrismaClient();
 
@@ -10,6 +11,7 @@ const db = new PrismaClient();
  * يُشغَّل مرة واحدة عبر: npx tsx prisma/clear-demo-data.ts
  */
 async function main() {
+  assertDestructiveAllowed("db:clear-demo");
   console.log("🧹 حذف بيانات العرض التجريبي…");
 
   await db.$transaction([

@@ -3,8 +3,10 @@ import { Topbar } from "@/components/admin/Topbar";
 import { Badge } from "@/components/ui/Badge";
 import { db } from "@/server/db";
 import { formatNumber } from "@/lib/format";
+import { requireAdminPage } from "@/server/auth/session";
 
 export default async function AdminInventoryPage() {
+  await requireAdminPage();
   const items = await db.inventoryItem.findMany({
     include: { variant: { include: { product: { include: { images: { take: 1, orderBy: { position: "asc" } } } } } } },
     orderBy: { onHand: "asc" },

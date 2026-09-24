@@ -4,8 +4,10 @@ import { Rating } from "@/components/ui/Rating";
 import { db } from "@/server/db";
 import { formatDate, formatNumber } from "@/lib/format";
 import { approveReviewAction, deleteReviewAction } from "@/server/reviews/actions";
+import { requireAdminPage } from "@/server/auth/session";
 
 export default async function AdminReviewsPage() {
+  await requireAdminPage();
   const reviews = await db.review.findMany({
     orderBy: [{ isApproved: "asc" }, { createdAt: "desc" }],
     include: { product: { select: { nameAr: true, slug: true } } },

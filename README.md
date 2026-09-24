@@ -26,9 +26,9 @@ npm install
 cp .env.example .env
 # عدّل DATABASE_URL إذا لزم، ووَلِّد SESSION_SECRET بـ: openssl rand -base64 32
 
-# 4. قاعدة البيانات
+# 4. قاعدة البيانات (+ حساب مالك محلي — لا توجد كلمة مرور افتراضية في الكود)
 npm run db:push
-npm run db:seed
+OWNER_EMAIL=you@example.com OWNER_PASSWORD='كلمة-مرور-قوية-12+' npm run db:seed
 
 # 5. التشغيل
 npm run dev
@@ -57,4 +57,24 @@ src/components        مكونات UI مشتركة + خاصة بالمتجر/ا�
 | `npm run build` | بناء الإنتاج |
 | `npm run typecheck` | فحص الأنواع |
 | `npm run db:studio` | واجهة Prisma لتصفح البيانات |
-| `npm run db:seed` | إعادة تعبئة البيانات التجريبية |
+| `npm run db:seed` | إعادة تعبئة البيانات التجريبية (محلياً فقط — يرفض العمل على قاعدة غير محلية) |
+| `npm run db:create-owner` | إنشاء/تصفير حساب المالك: `OWNER_EMAIL=… OWNER_PASSWORD='…' [RESET=1]` |
+| `npm run db:backup` | نسخة احتياطية لقاعدة البيانات وملفات الرفع في `backups/` |
+| `npm run db:restore -- <ملف.dump>` | استعادة نسخة إلى `RESTORE_DATABASE_URL` |
+
+## النسخ الاحتياطي والاستعادة
+
+1. **دوري تلقائي (الأساس):** في Railway فعّل Backups لخدمة Postgres ولـ Volume ملفات الرفع (`/app/public/uploads`).
+2. **نسخة يدوية خارجية** من جهازك (يتطلب `pg_dump` بنسخة ≥ نسخة الخادم):
+   ```bash
+   DATABASE_URL='<DATABASE_PUBLIC_URL من خدمة Postgres>' npm run db:backup
+   ```
+   الملفات في `backups/` مستثناة من git وتحتوي بيانات عملاء — احفظها في مكان خاص مشفّر.
+3. **الاستعادة المجرَّبة:** استعد أولاً إلى قاعدة مؤقتة فارغة وقارن الأعداد التي يطبعها الأمر مع الأصل:
+   ```bash
+   RESTORE_DATABASE_URL='<قاعدة مؤقتة>' npm run db:restore -- backups/db-XXXX.dump
+   ```
+   الاستعادة إلى قاعدة غير محلية تتطلب `CONFIRM_DESTRUCTIVE=yes` صراحةً. ملفات الرفع تُستعاد بفك
+   `backups/uploads-XXXX.tar.gz` داخل `public/`.
+
+السكربتات التي تحذف بيانات (`db:seed`, `db:fresh-start`, `db:clear-demo`) ترفض العمل على Railway أو أي قاعدة غير محلية ما لم يُمرَّر `CONFIRM_DESTRUCTIVE=yes`.

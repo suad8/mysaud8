@@ -33,7 +33,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ path: s
     return new NextResponse("غير موجود", { status: 404 });
   }
 
-  if (ADMIN_ONLY_SUBDIRS.has(segments[0])) {
+  const adminOnly = ADMIN_ONLY_SUBDIRS.has(segments[0]!);
+  if (adminOnly) {
     const session = await getSession();
     if (!session) return new NextResponse("غير موجود", { status: 404 });
   }
@@ -54,7 +55,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ path: s
     return new NextResponse(buffer, {
       headers: {
         "Content-Type": contentType,
-        "Cache-Control": "public, max-age=31536000, immutable",
+        "X-Content-Type-Options": "nosniff",
+        // الملفات الخاصة (إيصالات، ملفات العملاء) لا تُخزَّن في أي كاش مشترك أو بالمتصفح
+        "Cache-Control": adminOnly ? "private, no-store" : "public, max-age=31536000, immutable",
       },
     });
   } catch {

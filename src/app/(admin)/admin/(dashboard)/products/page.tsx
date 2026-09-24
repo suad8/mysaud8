@@ -8,6 +8,7 @@ import { db } from "@/server/db";
 import { PRODUCT_STATUS } from "@/lib/constants";
 import { formatNumber } from "@/lib/format";
 import type { Prisma, ProductStatus } from "@prisma/client";
+import { requireAdminPage } from "@/server/auth/session";
 
 type Props = { searchParams: Promise<{ q?: string; status?: string }> };
 
@@ -19,6 +20,7 @@ const STATUS_OPTIONS: { value: ProductStatus | "ALL"; label: string }[] = [
 ];
 
 export default async function AdminProductsPage({ searchParams }: Props) {
+  await requireAdminPage();
   const { q = "", status = "ALL" } = await searchParams;
 
   const where: Prisma.ProductWhereInput = {

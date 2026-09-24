@@ -84,9 +84,9 @@ export function AdminUsersManager({ users, currentUserId, canManage }: { users: 
             <input
               name="password"
               type="password"
-              placeholder="كلمة المرور (8 أحرف على الأقل)"
+              placeholder="كلمة المرور (12 حرفاً على الأقل)"
               required
-              minLength={8}
+              minLength={12}
               dir="ltr"
               className="num h-11 w-full rounded-xl border bg-transparent px-3.5 text-sm outline-none focus:ring-2 focus:ring-brand-500/40"
             />

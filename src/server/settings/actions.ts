@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireAdmin } from "@/server/auth/session";
+import { requireAdmin, requireOwner } from "@/server/auth/session";
 import { logAudit } from "@/server/audit/log";
 import { saveUploadedFile, UploadError } from "@/lib/uploads";
 import { safeHref } from "@/lib/theme";
@@ -16,8 +16,9 @@ import {
   saveStoreInfoSettings,
 } from "@/server/settings";
 
+// بيانات الحساب البنكي تُعرض للعملاء عند الدفع — تعديلها للمالك فقط (منع تحويل الأموال لحساب آخر)
 export async function updateBankSettingsAction(formData: FormData) {
-  const session = await requireAdmin();
+  const session = await requireOwner();
 
   await saveBankTransferSettings({
     enabled: formData.get("enabled") === "on",
@@ -34,7 +35,7 @@ export async function updateBankSettingsAction(formData: FormData) {
 }
 
 export async function updateGatewaySettingsAction(formData: FormData) {
-  const session = await requireAdmin();
+  const session = await requireOwner();
   const current = await getMoyasarSettings();
   const secretInput = String(formData.get("secretKey") ?? "").trim();
 
@@ -139,7 +140,8 @@ export async function updateSeoMarketingAction(
   _prevState: SettingsFormState,
   formData: FormData,
 ): Promise<SettingsFormState> {
-  const session = await requireAdmin();
+  // معرّفات GA/GTM تحقن سكربتات طرف ثالث في كل صفحات المتجر — للمالك فقط
+  const session = await requireOwner();
 
   const googleAnalyticsId = String(formData.get("googleAnalyticsId") ?? "").trim();
   if (googleAnalyticsId && !GA_ID_PATTERN.test(googleAnalyticsId)) {

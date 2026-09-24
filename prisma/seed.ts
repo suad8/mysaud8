@@ -1,12 +1,13 @@
 import { PrismaClient, ProductStatus, OrderStatus, PaymentMethod, PaymentStatus, DiscountType, AdminRole } from "@prisma/client";
 import { hashPassword } from "../src/server/auth/password";
+import { assertDestructiveAllowed } from "./guard";
 
 const db = new PrismaClient();
 
-// بيانات دخول المالك الافتراضية — تُنشأ مرة واحدة فقط إن لم يوجد الحساب
-// أصلاً (upsert)، ويُفترض تغيير كلمة المرور فوراً من الإعدادات بعد أول دخول.
-const OWNER_EMAIL = "saud09426@gmail.com";
-const OWNER_DEFAULT_PASSWORD = "Fnjn-Coffee-2026!";
+// حساب المالك يُنشأ فقط إن مُرِّرت بياناته عبر البيئة (OWNER_EMAIL/OWNER_PASSWORD)
+// — لا كلمة مرور افتراضية في الكود لأن المستودع عام.
+const OWNER_EMAIL = (process.env.OWNER_EMAIL ?? "").trim().toLowerCase();
+const OWNER_PASSWORD = process.env.OWNER_PASSWORD ?? "";
 
 // كتالوج تجريبي لمتجر "فنجان" — قهوة مختصة وماتشا فاخرة وأدوات تحضير.
 const CATEGORIES = [
@@ -89,6 +90,7 @@ const PRODUCTS: Seed[] = [
 ];
 
 async function main() {
+  assertDestructiveAllowed("db:seed");
   console.log("🧹 تنظيف البيانات السابقة…");
   await db.$transaction([
     db.orderEvent.deleteMany(), db.payment.deleteMany(), db.shipment.deleteMany(),
@@ -218,19 +220,21 @@ async function main() {
   }
 
   console.log("⚙️  المستخدم الإداري والإعدادات (بدون استبدال بيانات حقيقية موجودة)…");
-  const existingOwner = await db.adminUser.findUnique({ where: { email: OWNER_EMAIL } });
-  if (!existingOwner) {
+  const existingOwner = OWNER_EMAIL ? await db.adminUser.findUnique({ where: { email: OWNER_EMAIL } }) : null;
+  if (existingOwner) {
+    console.log(`   ↳ حساب المالك موجود مسبقاً (${OWNER_EMAIL}) — لم تُغيَّر كلمة المرور`);
+  } else if (OWNER_EMAIL && OWNER_PASSWORD.length >= 12) {
     await db.adminUser.create({
       data: {
         email: OWNER_EMAIL,
         name: "مدير المتجر",
         role: AdminRole.OWNER,
-        passwordHash: await hashPassword(OWNER_DEFAULT_PASSWORD),
+        passwordHash: await hashPassword(OWNER_PASSWORD),
       },
     });
-    console.log(`   ↳ حساب مالك جديد: ${OWNER_EMAIL} — غيّر كلمة المرور فوراً من الإعدادات`);
+    console.log(`   ↳ حساب مالك جديد: ${OWNER_EMAIL}`);
   } else {
-    console.log(`   ↳ حساب المالك موجود مسبقاً (${OWNER_EMAIL}) — لم تُغيَّر كلمة المرور`);
+    console.log("   ↳ لم يُنشأ حساب مالك — شغّل npm run db:create-owner مع OWNER_EMAIL و OWNER_PASSWORD");
   }
 
   await db.setting.createMany({

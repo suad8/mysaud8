@@ -14,10 +14,12 @@ import {
 } from "@/server/products/actions";
 import { PRODUCT_STATUS } from "@/lib/constants";
 import { parseCustomFieldDefs } from "@/server/products/custom-fields";
+import { requireAdminPage } from "@/server/auth/session";
 
 type Props = { params: Promise<{ id: string }> };
 
 export default async function EditProductPage({ params }: Props) {
+  await requireAdminPage();
   const { id } = await params;
   const [product, categories] = await Promise.all([
     db.product.findUnique({

@@ -4,33 +4,37 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/server/db";
 import { hashPassword, verifyPassword } from "@/server/auth/password";
-import { setSessionCookie, clearSessionCookie, getSession, requireAdmin } from "@/server/auth/session";
+import { setSessionCookie, clearSessionCookie, getSession, requireOwner } from "@/server/auth/session";
 import { AdminRole } from "@prisma/client";
 import { logAudit } from "@/server/audit/log";
 import { getClientIp } from "@/lib/request-ip";
+import { createRateLimiter } from "@/lib/rate-limit";
 
 export type LoginState = { error?: string; email?: string };
 
 /**
- * حماية بسيطة من تخمين كلمة المرور بالتكرار — بالذاكرة داخل نفس العملية.
- * ⚠️ تُصفَّر عند إعادة تشغيل الخادم، ولا تُشارك بين عدّة نسخ (instances)
- * إن وُسِّع التطبيق لاحقاً. كافية لخادم واحد؛ الأنسب لاحقاً نقلها لمخزن
- * مشترك (Redis) عند التوسّع.
+ * حماية من تخمين كلمة المرور: حدّ للمحاولات الفاشلة لكل بريد (يحمي الحساب
+ * المستهدف) وحدّ أوسع لكل IP (يمنع تجربة كلمة واحدة على بريدات كثيرة).
  */
-const attempts = new Map<string, { count: number; lockedUntil: number }>();
-const MAX_ATTEMPTS = 5;
-const LOCK_MS = 5 * 60 * 1000;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const failuresByEmail = createRateLimiter({ max: 5, windowMs: LOGIN_WINDOW_MS });
+const failuresByIp = createRateLimiter({ max: 20, windowMs: LOGIN_WINDOW_MS });
+
+const MIN_PASSWORD_LENGTH = 12;
+const MAX_PASSWORD_LENGTH = 200;
+
+/** تجزئة وهمية ثابتة — يُتحقَّق منها عند عدم وجود البريد حتى لا يكشف زمن الرد وجود الحساب. */
+let dummyHash: Promise<string> | null = null;
 
 export async function loginAction(_prevState: LoginState, formData: FormData): Promise<LoginState> {
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  const password = String(formData.get("password") ?? "");
+  const email = String(formData.get("email") ?? "").trim().toLowerCase().slice(0, 200);
+  const password = String(formData.get("password") ?? "").slice(0, MAX_PASSWORD_LENGTH);
   const next = String(formData.get("next") ?? "/admin");
 
   const ip = await getClientIp();
-  const key = email || "unknown";
-  const record = attempts.get(key);
-  if (record && record.lockedUntil > Date.now()) {
-    const minutes = Math.ceil((record.lockedUntil - Date.now()) / 60_000);
+  const ipKey = ip ?? "unknown";
+  if (failuresByEmail.isLimited(email) || failuresByIp.isLimited(ipKey)) {
+    const minutes = Math.max(failuresByEmail.minutesLeft(email), failuresByIp.minutesLeft(ipKey));
     return { error: `محاولات دخول كثيرة فاشلة — حاول مرة أخرى بعد ${minutes} دقيقة`, email };
   }
 
@@ -39,16 +43,17 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
   }
 
   const user = await db.adminUser.findUnique({ where: { email } });
-  const validPassword = user ? await verifyPassword(password, user.passwordHash) : false;
+  dummyHash ??= hashPassword("dummy-password-for-timing");
+  const validPassword = await verifyPassword(password, user?.passwordHash ?? (await dummyHash));
   const ok = Boolean(user?.isActive && validPassword);
 
   if (!ok) {
-    const updated = { count: (record?.count ?? 0) + 1, lockedUntil: 0 };
-    if (updated.count >= MAX_ATTEMPTS) updated.lockedUntil = Date.now() + LOCK_MS;
-    attempts.set(key, updated);
+    failuresByEmail.hit(email);
+    failuresByIp.hit(ipKey);
+    const locked = failuresByEmail.isLimited(email) || failuresByIp.isLimited(ipKey);
     await logAudit({
       actorId: user?.id ?? null,
-      action: updated.lockedUntil > 0 ? "login.locked" : "login.failed",
+      action: locked ? "login.locked" : "login.failed",
       entity: "AdminUser",
       entityId: user?.id ?? null,
       diff: { email },
@@ -57,12 +62,13 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
     return { error: "البريد الإلكتروني أو كلمة المرور غير صحيحة", email };
   }
 
-  attempts.delete(key);
-  await setSessionCookie({ sub: user!.id, role: user!.role, name: user!.name });
+  failuresByEmail.reset(email);
+  await setSessionCookie(user!);
   await db.adminUser.update({ where: { id: user!.id }, data: { lastLoginAt: new Date() } });
   await logAudit({ actorId: user!.id, action: "login.success", entity: "AdminUser", entityId: user!.id, ip });
 
-  redirect(next.startsWith("/admin") ? next : "/admin");
+  // مسار داخلي فقط — يمنع إعادة التوجيه لموقع خارجي عبر معامل next
+  redirect(/^\/admin(\/[\w\-/]*)?$/.test(next) ? next : "/admin");
 }
 
 export async function logoutAction() {
@@ -87,7 +93,8 @@ export async function changePasswordAction(
   const next = String(formData.get("newPassword") ?? "");
   const confirm = String(formData.get("confirmPassword") ?? "");
 
-  if (next.length < 8) return { error: "كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل" };
+  if (next.length < MIN_PASSWORD_LENGTH) return { error: `كلمة المرور الجديدة يجب أن تكون ${MIN_PASSWORD_LENGTH} حرفاً على الأقل` };
+  if (next.length > MAX_PASSWORD_LENGTH) return { error: "كلمة المرور طويلة جداً" };
   if (next !== confirm) return { error: "كلمتا المرور غير متطابقتين" };
 
   const user = await db.adminUser.findUnique({ where: { id: session.sub } });
@@ -95,21 +102,16 @@ export async function changePasswordAction(
     return { error: "كلمة المرور الحالية غير صحيحة" };
   }
 
-  await db.adminUser.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(next) } });
+  const updated = await db.adminUser.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(next) } });
+  // تغيّر كلمة المرور يُبطل كل الجلسات المفتوحة (بأي جهاز) — نُصدر جلسة جديدة لهذا الجهاز فقط
+  await setSessionCookie(updated);
   await logAudit({ actorId: session.sub, action: "password.changed", entity: "AdminUser", entityId: session.sub });
   return { success: true };
 }
 
 export type ManageUsersState = { error?: string; success?: boolean };
 
-/** إدارة المستخدمين محصورة بدور "مالك" — يمنع موظفاً من منح نفسه صلاحيات أعلى. */
-async function requireOwner() {
-  const session = await requireAdmin();
-  if (session.role !== AdminRole.OWNER) {
-    throw new Error("هذا الإجراء متاح لحساب المالك فقط");
-  }
-  return session;
-}
+// إدارة المستخدمين محصورة بدور "مالك" (requireOwner) — يمنع موظفاً من منح نفسه صلاحيات أعلى.
 
 export async function createAdminUserAction(
   _prevState: ManageUsersState,
@@ -125,7 +127,8 @@ export async function createAdminUserAction(
 
   if (!name) return { error: "الاسم مطلوب" };
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "البريد الإلكتروني غير صالح" };
-  if (password.length < 8) return { error: "كلمة المرور يجب أن تكون 8 أحرف على الأقل" };
+  if (password.length < MIN_PASSWORD_LENGTH) return { error: `كلمة المرور يجب أن تكون ${MIN_PASSWORD_LENGTH} حرفاً على الأقل` };
+  if (password.length > MAX_PASSWORD_LENGTH) return { error: "كلمة المرور طويلة جداً" };
 
   const existing = await db.adminUser.findUnique({ where: { email } });
   if (existing) return { error: "هذا البريد الإلكتروني مستخدم مسبقاً" };

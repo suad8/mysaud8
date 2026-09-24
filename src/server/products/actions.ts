@@ -13,6 +13,8 @@ import { slugify, uniqueSlug } from "@/lib/slug";
 export type ProductFormState = {
   error?: string;
   fieldErrors?: Record<string, string>;
+  /** وقت آخر حفظ ناجح — لإظهار تأكيد الحفظ في النموذج */
+  savedAt?: number;
 };
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -335,7 +337,7 @@ export async function updateProductAction(
   revalidatePath("/admin/products");
   revalidatePath("/admin/inventory");
   revalidatePath("/");
-  return {};
+  return { savedAt: Date.now() };
 }
 
 /** أرشفة: يخفي المنتج من المتجر دون حذف سجلاته (الطلبات القديمة تبقى صالحة). */

@@ -5,8 +5,10 @@ import { db } from "@/server/db";
 import { getHeroContent, getHomepageSections, getThemeSettings } from "@/server/settings";
 import { deleteSubscriberAction } from "@/server/newsletter/actions";
 import { formatDate, formatNumber } from "@/lib/format";
+import { requireAdminPage } from "@/server/auth/session";
 
 export default async function AdminThemePage() {
+  await requireAdminPage();
   const [hero, theme, visibility, products, subscribers] = await Promise.all([
     getHeroContent(),
     getThemeSettings(),

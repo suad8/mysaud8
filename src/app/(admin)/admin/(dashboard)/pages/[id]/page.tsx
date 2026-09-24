@@ -5,10 +5,12 @@ import { PageForm } from "@/components/admin/PageForm";
 import { ConfirmSubmitButton } from "@/components/admin/ConfirmSubmitButton";
 import { db } from "@/server/db";
 import { deletePageAction, updatePageAction } from "@/server/pages/actions";
+import { requireAdminPage } from "@/server/auth/session";
 
 type Props = { params: Promise<{ id: string }> };
 
 export default async function EditPagePage({ params }: Props) {
+  await requireAdminPage();
   const { id } = await params;
   const page = await db.page.findUnique({ where: { id } });
   if (!page) notFound();

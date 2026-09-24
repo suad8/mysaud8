@@ -5,24 +5,16 @@ import { db } from "@/server/db";
 import { requireAdmin } from "@/server/auth/session";
 import { logAudit } from "@/server/audit/log";
 import { getClientIp } from "@/lib/request-ip";
+import { createRateLimiter } from "@/lib/rate-limit";
 
 export type NewsletterState = { error?: string; success?: boolean };
 
-const attempts = new Map<string, { count: number; windowStart: number }>();
-const MAX_PER_WINDOW = 5;
-const WINDOW_MS = 10 * 60 * 1000;
+const attempts = createRateLimiter({ max: 5, windowMs: 10 * 60 * 1000 });
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export async function subscribeNewsletterAction(_prev: NewsletterState, formData: FormData): Promise<NewsletterState> {
   const ip = (await getClientIp()) ?? "unknown";
-  const now = Date.now();
-  const record = attempts.get(ip);
-  if (record && now - record.windowStart < WINDOW_MS) {
-    if (record.count >= MAX_PER_WINDOW) return { error: "محاولات كثيرة — حاول لاحقاً." };
-    record.count += 1;
-  } else {
-    attempts.set(ip, { count: 1, windowStart: now });
-  }
+  if (!attempts.hit(ip)) return { error: "محاولات كثيرة — حاول لاحقاً." };
 
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   if (!EMAIL_PATTERN.test(email) || email.length > 200) return { error: "يرجى إدخال بريد إلكتروني صحيح" };

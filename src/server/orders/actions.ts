@@ -3,11 +3,12 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/server/db";
-import { saveUploadedFile, UploadError } from "@/lib/uploads";
+import { deleteUploadedFile, saveUploadedFile, UploadError } from "@/lib/uploads";
 import { createOrderFromCheckout, ShippingError, StockError } from "@/server/orders/create";
 import { requireAdmin } from "@/server/auth/session";
 import { logAudit } from "@/server/audit/log";
 import { getClientIp } from "@/lib/request-ip";
+import { createRateLimiter } from "@/lib/rate-limit";
 import { OrderStatus, PaymentStatus, Prisma } from "@prisma/client";
 import { ORDER_STATUS, type OrderStatusKey } from "@/lib/constants";
 
@@ -42,9 +43,7 @@ const REQUIRED: [string, string][] = [
  * حماية بسيطة من إغراق صفحة الدفع بطلبات وهمية متكررة — بالذاكرة داخل
  * نفس العملية (نفس قيود login rate-limit: لا تُشارك بين عدّة نسخ خادم).
  */
-const orderAttempts = new Map<string, { count: number; windowStart: number }>();
-const MAX_ORDERS_PER_WINDOW = 5;
-const WINDOW_MS = 10 * 60 * 1000;
+const orderAttempts = createRateLimiter({ max: 5, windowMs: 10 * 60 * 1000 });
 
 function readContactValues(formData: FormData): CheckoutContactValues {
   return {
@@ -65,15 +64,8 @@ export async function createOrderAction(
 ): Promise<CheckoutFormState> {
   const values = readContactValues(formData);
   const ip = (await getClientIp()) ?? "unknown";
-  const now = Date.now();
-  const record = orderAttempts.get(ip);
-  if (record && now - record.windowStart < WINDOW_MS) {
-    if (record.count >= MAX_ORDERS_PER_WINDOW) {
-      return { error: "عدد كبير من الطلبات خلال وقت قصير — يرجى المحاولة لاحقاً.", values };
-    }
-    record.count += 1;
-  } else {
-    orderAttempts.set(ip, { count: 1, windowStart: now });
+  if (!orderAttempts.hit(ip)) {
+    return { error: "عدد كبير من الطلبات خلال وقت قصير — يرجى المحاولة لاحقاً.", values };
   }
 
   const fieldErrors: Record<string, string> = {};
@@ -91,7 +83,7 @@ export async function createOrderAction(
     return { error: "طريقة الدفع المختارة غير متاحة حالياً — يرجى اختيار التحويل البنكي أو الدفع عند الاستلام.", values };
   }
 
-  let receiptUrl: string | null = null;
+  let receiptFile: File | null = null;
   if (paymentMethod === "BANK_TRANSFER") {
     if (!formData.get("confirmTransfer")) {
       fieldErrors.confirmTransfer = "يجب تأكيد إتمام التحويل قبل المتابعة";
@@ -100,11 +92,7 @@ export async function createOrderAction(
     if (!(file instanceof File) || file.size === 0) {
       fieldErrors.receipt = "يرجى إرفاق صورة أو ملف PDF لإيصال التحويل";
     } else {
-      try {
-        receiptUrl = await saveUploadedFile(file, "receipts");
-      } catch (e) {
-        fieldErrors.receipt = e instanceof UploadError ? e.message : "تعذّر رفع الملف، حاول مرة أخرى";
-      }
+      receiptFile = file;
     }
   }
 
@@ -115,6 +103,16 @@ export async function createOrderAction(
   const shippingRateId = String(formData.get("shippingRateId") ?? "");
   if (!shippingRateId) {
     return { error: "يرجى اختيار طريقة الشحن", values };
+  }
+
+  // الإيصال يُحفظ على القرص فقط بعد نجاح كل التحققات — لا ملفات يتيمة من محاولات فاشلة
+  let receiptUrl: string | null = null;
+  if (receiptFile) {
+    try {
+      receiptUrl = await saveUploadedFile(receiptFile, "receipts");
+    } catch (e) {
+      return { fieldErrors: { receipt: e instanceof UploadError ? e.message : "تعذّر رفع الملف، حاول مرة أخرى" }, values };
+    }
   }
 
   let orderNumber: string;
@@ -136,6 +134,7 @@ export async function createOrderAction(
     });
     orderNumber = order.number;
   } catch (e) {
+    if (receiptUrl) await deleteUploadedFile(receiptUrl);
     if (e instanceof StockError || e instanceof ShippingError) return { error: e.message, values };
     if (e instanceof Error && e.message === "السلة فارغة") {
       return { error: "سلتك فارغة — أضف منتجات قبل إتمام الطلب.", values };

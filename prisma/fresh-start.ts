@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { applyBrand, writeSetting } from "./brand";
+import { assertDestructiveAllowed } from "./guard";
 
 const db = new PrismaClient();
 
@@ -16,6 +17,7 @@ const DEMO_COUPON_CODES = ["WELCOME10", "FREESHIP", "SAVE30"];
 const DEMO_IBAN = "SA44 2000 0001 2345 6789 1234";
 
 async function main() {
+  assertDestructiveAllowed("db:fresh-start");
   const before = {
     منتجات: await db.product.count(),
     طلبات: await db.order.count(),

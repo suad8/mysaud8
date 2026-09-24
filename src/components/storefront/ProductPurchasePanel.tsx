@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { startTransition, useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { Price } from "@/components/ui/Price";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -27,6 +27,22 @@ export function ProductPurchasePanel({
   const [quantity, setQuantity] = useState(1);
   const [textValues, setTextValues] = useState<Record<string, string>>({});
   const [fileNames, setFileNames] = useState<Record<string, string | null>>({});
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // بعد إضافة ناجحة فقط: تفريغ الحقول المخصّصة لطلب جديد (عند الخطأ تبقى الملفات والنصوص كما هي)
+  useEffect(() => {
+    if (!state.success) return;
+    formRef.current?.reset();
+    setTextValues({});
+    setFileNames({});
+  }, [state]);
+
+  /** إرسال يدوي: الإرسال التلقائي في React 19 يفرّغ حقل الملف حتى عند فشل الإضافة. */
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter);
+    startTransition(() => formAction(formData));
+  }
 
   const missingRequired = customFields.some((f) => {
     if (!f.required) return false;
@@ -81,7 +97,7 @@ export function ProductPurchasePanel({
         </div>
       )}
 
-      <form action={formAction} className="mt-7">
+      <form ref={formRef} action={formAction} onSubmit={handleSubmit} className="mt-7">
         <input type="hidden" name="variantId" value={selectedId} />
         <input type="hidden" name="quantity" value={quantity} />
 

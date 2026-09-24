@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { startTransition, useActionState, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import type { ProductFormState } from "@/server/products/actions";
@@ -79,6 +79,14 @@ export function ProductForm({
   const data = initial ?? EMPTY;
   const [state, formAction, isPending] = useActionState(action, {});
   const [imageName, setImageName] = useState<string | null>(null);
+  const [clientError, setClientError] = useState<string | null>(null);
+  const topRef = useRef<HTMLDivElement>(null);
+
+  const hasErrors = Boolean(clientError || state.error || (state.fieldErrors && Object.keys(state.fieldErrors).length > 0));
+  // عند فشل الحفظ: انتقل لأعلى النموذج حيث رسالة الخطأ — كانت تظهر خارج الشاشة فيبدو كأن الحفظ لم يحدث
+  useEffect(() => {
+    if (hasErrors) topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [state, clientError, hasErrors]);
 
   const [multiOption, setMultiOption] = useState(data.variants.length > 1);
   const [rows, setRows] = useState<EditableVariant[]>(() =>
@@ -130,11 +138,29 @@ export function ProductForm({
 
   const err = (field: string) => state.fieldErrors?.[field];
 
+  /**
+   * إرسال يدوي داخل transition بدل الإرسال التلقائي: React 19 يفرّغ حقول النموذج
+   * بعد كل إرسال تلقائي حتى عند فشل الحفظ، فيضيع ما كتبه المستخدم.
+   */
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (customFields.some((f) => !f.label.trim())) {
+      setClientError("اكتب عنواناً لكل حقل مخصّص (مثال: أرفق تصميمك) أو احذف الحقل الفارغ.");
+      return;
+    }
+    setClientError(null);
+    const formData = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter);
+    startTransition(() => formAction(formData));
+  }
+
+  const errorMessage = clientError ?? state.error ?? (state.fieldErrors && Object.keys(state.fieldErrors).length > 0 ? "لم يتم الحفظ — راجع الحقول المظلّلة بالأحمر." : null);
+
   return (
-    <form action={formAction}>
-      {state.error && (
-        <div className="mb-6 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-inset ring-red-200 dark:bg-red-950 dark:text-red-300">
-          {state.error}
+    <form action={formAction} onSubmit={handleSubmit}>
+      <div ref={topRef} className="scroll-mt-24" />
+      {errorMessage && (
+        <div role="alert" className="mb-6 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-inset ring-red-200 dark:bg-red-950 dark:text-red-300">
+          {errorMessage}
         </div>
       )}
 
@@ -264,7 +290,7 @@ export function ProductForm({
                     value={f.label}
                     onChange={(e) => updateCustomField(f.key, { label: e.target.value })}
                     placeholder="عنوان الحقل (مثال: أرفق تصميمك)"
-                    className="h-10 min-w-[160px] flex-1 rounded-lg border bg-transparent px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500/40"
+                    className={`h-10 min-w-[160px] flex-1 rounded-lg border bg-transparent px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500/40 ${clientError && !f.label.trim() ? "border-red-400" : ""}`}
                   />
                   <select
                     name="customFieldType"
@@ -352,6 +378,11 @@ export function ProductForm({
           <Button type="submit" size="lg" className="w-full" disabled={isPending}>
             {isPending ? "جارٍ الحفظ…" : mode === "create" ? "إنشاء المنتج" : "حفظ التغييرات"}
           </Button>
+          {/* حالة الحفظ بجانب الزر مباشرة — لا يحتاج المستخدم للتمرير لأعلى ليعرف النتيجة */}
+          {!isPending && errorMessage && <p role="status" className="text-center text-sm text-red-600">{errorMessage}</p>}
+          {!isPending && !errorMessage && state.savedAt && (
+            <p role="status" key={state.savedAt} className="text-center text-sm font-medium text-emerald-600">تم حفظ التغييرات ✓</p>
+          )}
         </div>
       </div>
     </form>

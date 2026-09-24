@@ -63,6 +63,8 @@ function ToggleRow({ name, label, defaultChecked }: { name: string; label: strin
 export default async function AdminSettingsPage() {
   const session = await getSession();
   if (!session) redirect("/admin/login");
+  // بيانات الدفع وسكربتات التتبّع للمالك فقط — الإجراءات نفسها تتحقق بـ requireOwner على الخادم
+  const isOwner = session.role === AdminRole.OWNER;
 
   const [bank, gateway, storeInfo, seo, users] = await Promise.all([
     getBankTransferSettings(),
@@ -109,52 +111,62 @@ export default async function AdminSettingsPage() {
           <ChangePasswordForm />
         </Section>
 
-        <Section title="أدوات قوقل والتسويق" desc="تحليلات الزيارات وتحسين الظهور في نتائج بحث قوقل ومتجر قوقل.">
-          <SeoMarketingForm seo={seo} siteUrl={SITE_URL} />
-        </Section>
+        {isOwner ? (
+          <Section title="أدوات قوقل والتسويق" desc="تحليلات الزيارات وتحسين الظهور في نتائج بحث قوقل ومتجر قوقل.">
+            <SeoMarketingForm seo={seo} siteUrl={SITE_URL} />
+          </Section>
+        ) : (
+          <Section title="إعدادات الدفع والتتبّع">
+            <p className="text-sm text-muted">بيانات الحساب البنكي وبوابة الدفع وأدوات قوقل يعدّلها حساب المالك فقط.</p>
+          </Section>
+        )}
 
         {/* ── التحويل البنكي: قسم فعّال يحفظ في قاعدة البيانات ويظهر مباشرة في صفحة الدفع ── */}
-        <form action={updateBankSettingsAction} className="lg:col-span-2">
-          <Section title="الدفع بالتحويل البنكي" desc="البيانات هنا تظهر للعميل مباشرة عند اختياره «تحويل بنكي» في صفحة الدفع.">
-            <ToggleRow name="enabled" label="تفعيل الدفع بالتحويل البنكي" defaultChecked={bank.enabled} />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field name="bankName" label="اسم البنك" defaultValue={bank.bankName} placeholder="مثال: البنك الأهلي السعودي" />
-              <Field name="accountName" label="اسم صاحب الحساب" defaultValue={bank.accountName} placeholder="مثال: شركة الورقة الذهبية للطباعة" />
-              <Field name="iban" label="رقم الآيبان (IBAN)" defaultValue={bank.iban} placeholder="SA00 0000 0000 0000 0000 0000" className="num" />
-              <Field name="accountNumber" label="رقم الحساب" defaultValue={bank.accountNumber} className="num" />
-            </div>
-            <div className="flex justify-end">
-              <Button type="submit" size="sm">حفظ بيانات الحساب</Button>
-            </div>
-          </Section>
-        </form>
+        {isOwner && (
+          <form action={updateBankSettingsAction} className="lg:col-span-2">
+            <Section title="الدفع بالتحويل البنكي" desc="البيانات هنا تظهر للعميل مباشرة عند اختياره «تحويل بنكي» في صفحة الدفع.">
+              <ToggleRow name="enabled" label="تفعيل الدفع بالتحويل البنكي" defaultChecked={bank.enabled} />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field name="bankName" label="اسم البنك" defaultValue={bank.bankName} placeholder="مثال: البنك الأهلي السعودي" />
+                <Field name="accountName" label="اسم صاحب الحساب" defaultValue={bank.accountName} placeholder="مثال: شركة الورقة الذهبية للطباعة" />
+                <Field name="iban" label="رقم الآيبان (IBAN)" defaultValue={bank.iban} placeholder="SA00 0000 0000 0000 0000 0000" className="num" />
+                <Field name="accountNumber" label="رقم الحساب" defaultValue={bank.accountNumber} className="num" />
+              </div>
+              <div className="flex justify-end">
+                <Button type="submit" size="sm">حفظ بيانات الحساب</Button>
+              </div>
+            </Section>
+          </form>
+        )}
 
         {/* ── بوابة الدفع الإلكتروني: قسم فعّال، يخزّن المفاتيح لربط حقيقي لاحقاً ── */}
-        <form action={updateGatewaySettingsAction} className="lg:col-span-2">
-          <Section
-            title="بوابة الدفع الإلكتروني (Moyasar)"
-            desc="لتفعيل الدفع الفوري بمدى وApple Pay والبطاقات. أدخل مفاتيح حسابك في Moyasar — المفتاح السري لا يُعرض بعد الحفظ لأسباب أمنية."
-          >
-            <ToggleRow name="enabled" label="تفعيل بوابة Moyasar" defaultChecked={gateway.enabled} />
-            <Field name="publishableKey" label="المفتاح العلني (Publishable Key)" defaultValue={gateway.publishableKey} className="num" dir="ltr" />
-            <Field
-              name="secretKey"
-              label="المفتاح السري (Secret Key)"
-              type="password"
-              placeholder={gateway.secretKey ? maskSecret(gateway.secretKey) : "لم يُحفظ بعد"}
-              dir="ltr"
-            />
-            <p className="text-[11px] text-muted">
-              اترك حقل المفتاح السري فارغاً عند الحفظ للإبقاء على القيمة المحفوظة حالياً.
-            </p>
-            <div className="flex justify-end">
-              <Button type="submit" size="sm">حفظ إعدادات البوابة</Button>
-            </div>
-          </Section>
-        </form>
+        {isOwner && (
+          <form action={updateGatewaySettingsAction} className="lg:col-span-2">
+            <Section
+              title="بوابة الدفع الإلكتروني (Moyasar)"
+              desc="لتفعيل الدفع الفوري بمدى وApple Pay والبطاقات. أدخل مفاتيح حسابك في Moyasar — المفتاح السري لا يُعرض بعد الحفظ لأسباب أمنية."
+            >
+              <ToggleRow name="enabled" label="تفعيل بوابة Moyasar" defaultChecked={gateway.enabled} />
+              <Field name="publishableKey" label="المفتاح العلني (Publishable Key)" defaultValue={gateway.publishableKey} className="num" dir="ltr" />
+              <Field
+                name="secretKey"
+                label="المفتاح السري (Secret Key)"
+                type="password"
+                placeholder={gateway.secretKey ? maskSecret(gateway.secretKey) : "لم يُحفظ بعد"}
+                dir="ltr"
+              />
+              <p className="text-[11px] text-muted">
+                اترك حقل المفتاح السري فارغاً عند الحفظ للإبقاء على القيمة المحفوظة حالياً.
+              </p>
+              <div className="flex justify-end">
+                <Button type="submit" size="sm">حفظ إعدادات البوابة</Button>
+              </div>
+            </Section>
+          </form>
+        )}
 
         <Section title="المستخدمون والصلاحيات" desc="حسابات الدخول إلى لوحة التحكم.">
-          <AdminUsersManager users={users} currentUserId={session.sub} canManage={session.role === AdminRole.OWNER} />
+          <AdminUsersManager users={users} currentUserId={session.sub} canManage={isOwner} />
         </Section>
       </div>
     </>

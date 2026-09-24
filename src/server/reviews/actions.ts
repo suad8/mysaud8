@@ -5,13 +5,12 @@ import { db } from "@/server/db";
 import { requireAdmin } from "@/server/auth/session";
 import { logAudit } from "@/server/audit/log";
 import { getClientIp } from "@/lib/request-ip";
+import { createRateLimiter } from "@/lib/rate-limit";
 
 export type ReviewFormState = { error?: string; success?: boolean };
 
 /** حماية بسيطة من إغراق تقييمات وهمية متكررة — نفس نمط تحديد المعدّل بالجلسات الأخرى. */
-const reviewAttempts = new Map<string, { count: number; windowStart: number }>();
-const MAX_REVIEWS_PER_WINDOW = 5;
-const WINDOW_MS = 10 * 60 * 1000;
+const reviewAttempts = createRateLimiter({ max: 5, windowMs: 10 * 60 * 1000 });
 
 export async function submitReviewAction(
   productSlug: string,
@@ -19,15 +18,8 @@ export async function submitReviewAction(
   formData: FormData,
 ): Promise<ReviewFormState> {
   const ip = (await getClientIp()) ?? "unknown";
-  const now = Date.now();
-  const record = reviewAttempts.get(ip);
-  if (record && now - record.windowStart < WINDOW_MS) {
-    if (record.count >= MAX_REVIEWS_PER_WINDOW) {
-      return { error: "عدد كبير من التقييمات خلال وقت قصير — يرجى المحاولة لاحقاً." };
-    }
-    record.count += 1;
-  } else {
-    reviewAttempts.set(ip, { count: 1, windowStart: now });
+  if (!reviewAttempts.hit(ip)) {
+    return { error: "عدد كبير من التقييمات خلال وقت قصير — يرجى المحاولة لاحقاً." };
   }
 
   const authorName = String(formData.get("authorName") ?? "").trim();

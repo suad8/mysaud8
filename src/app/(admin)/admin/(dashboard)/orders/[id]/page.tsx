@@ -13,6 +13,7 @@ import { ORDER_STATUS, PAYMENT_METHOD_LABEL, type OrderStatusKey } from "@/lib/c
 import { formatDateTime } from "@/lib/format";
 import { confirmBankPaymentAction, rejectBankPaymentAction, updateOrderStatusAction } from "@/server/orders/actions";
 import { parseCustomFieldValues } from "@/server/products/custom-fields";
+import { requireAdminPage } from "@/server/auth/session";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -24,6 +25,7 @@ const NEXT_STATUS: Partial<Record<OrderStatusKey, OrderStatusKey>> = {
 };
 
 export default async function AdminOrderDetailPage({ params }: Props) {
+  await requireAdminPage();
   const { id } = await params;
   const order = await db.order.findUnique({
     where: { id },

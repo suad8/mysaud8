@@ -5,10 +5,12 @@ import { Badge } from "@/components/ui/Badge";
 import { db } from "@/server/db";
 import { formatNumber } from "@/lib/format";
 import { createCategoryAction, deleteCategoryAction, updateCategoryAction } from "@/server/categories/actions";
+import { requireAdminPage } from "@/server/auth/session";
 
 const inputCls = "h-10 w-full rounded-lg border bg-transparent px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500/40";
 
 export default async function AdminCategoriesPage() {
+  await requireAdminPage();
   const categories = await db.category.findMany({
     orderBy: [{ position: "asc" }, { createdAt: "asc" }],
     include: { _count: { select: { products: true, children: true } } },

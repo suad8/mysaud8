@@ -3,10 +3,12 @@ import { Price } from "@/components/ui/Price";
 import { db } from "@/server/db";
 import { OrderStatus } from "@prisma/client";
 import { formatNumber } from "@/lib/format";
+import { requireAdminPage } from "@/server/auth/session";
 
 const PAID = [OrderStatus.PAID, OrderStatus.PROCESSING, OrderStatus.SHIPPED, OrderStatus.DELIVERED];
 
 export default async function AdminReportsPage() {
+  await requireAdminPage();
   const items = await db.orderItem.groupBy({
     by: ["nameAr"],
     _sum: { quantity: true, lineTotal: true },

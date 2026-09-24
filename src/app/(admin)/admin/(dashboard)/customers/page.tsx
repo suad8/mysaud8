@@ -3,8 +3,10 @@ import { Topbar } from "@/components/admin/Topbar";
 import { Price } from "@/components/ui/Price";
 import { db } from "@/server/db";
 import { formatDate, formatNumber } from "@/lib/format";
+import { requireAdminPage } from "@/server/auth/session";
 
 export default async function AdminCustomersPage() {
+  await requireAdminPage();
   const customers = await db.customer.findMany({
     orderBy: { createdAt: "desc" },
     include: { orders: { select: { grandTotal: true } } },

@@ -1,67 +1,19 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { cache } from "react";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { AdminRole } from "@prisma/client";
+import { COOKIE_NAME, MAX_AGE_SECONDS, createSessionToken, verifySessionToken, type SessionPayload } from "@/server/auth/session-token";
 
 /**
- * جلسات موقّعة بلا حالة (stateless) — لا تُخزَّن في قاعدة البيانات.
- * القيمة: base64url(payload).base64url(HMAC-SHA256(payload)).
- * لا تعتمد على أي حزمة خارجية (crypto مدمجة في Node).
+ * جلسات لوحة التحكم — الكوكي موقَّع، وكل طلب يُتحقَّق منه مقابل قاعدة
+ * البيانات (انظر session-token.ts). لا تعتمد على أي حزمة خارجية.
  */
 
-const COOKIE_NAME = "fnjn_admin_session";
-const MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // أسبوع
+export type { SessionPayload };
 
-export type SessionPayload = {
-  sub: string; // معرّف المستخدم الإداري
-  role: string;
-  name: string;
-  exp: number; // وقت الانتهاء (ms epoch)
-};
-
-function getSecret(): string {
-  const secret = process.env.SESSION_SECRET;
-  if (!secret) {
-    // فشل واضح بدل جلسة قابلة للتزوير بمفتاح فارغ/متوقَّع
-    throw new Error("SESSION_SECRET غير مضبوط — لا يمكن إصدار جلسات آمنة بدونه");
-  }
-  return secret;
-}
-
-function b64url(input: Buffer | string): string {
-  return Buffer.from(input).toString("base64url");
-}
-
-function sign(payload: string): string {
-  return createHmac("sha256", getSecret()).update(payload).digest("base64url");
-}
-
-export function encodeSession(data: SessionPayload): string {
-  const payload = b64url(JSON.stringify(data));
-  return `${payload}.${sign(payload)}`;
-}
-
-export function decodeSession(token: string | undefined | null): SessionPayload | null {
-  if (!token) return null;
-  const [payload, signature] = token.split(".");
-  if (!payload || !signature) return null;
-
-  const expected = sign(payload);
-  const a = Buffer.from(signature);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
-
-  try {
-    const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as SessionPayload;
-    if (typeof data.exp !== "number" || data.exp < Date.now()) return null;
-    return data;
-  } catch {
-    return null;
-  }
-}
-
-export async function setSessionCookie(data: Omit<SessionPayload, "exp">) {
+export async function setSessionCookie(user: { id: string; passwordHash: string }) {
   const jar = await cookies();
-  const exp = Date.now() + MAX_AGE_SECONDS * 1000;
-  jar.set(COOKIE_NAME, encodeSession({ ...data, exp }), {
+  jar.set(COOKIE_NAME, createSessionToken(user), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -72,23 +24,43 @@ export async function setSessionCookie(data: Omit<SessionPayload, "exp">) {
 
 export async function clearSessionCookie() {
   const jar = await cookies();
-  jar.delete(COOKIE_NAME);
+  // كوكي __Host- لا يُحذف إلا بنفس خصائصه (Secure + path=/)
+  jar.set(COOKIE_NAME, "", { path: "/", maxAge: 0, httpOnly: true, secure: process.env.NODE_ENV === "production" });
 }
 
-export async function getSession(): Promise<SessionPayload | null> {
+/** مُخزَّنة لكل طلب (React cache) — التخطيط والصفحة والإجراء يتشاركون استعلاماً واحداً. */
+export const getSession = cache(async (): Promise<SessionPayload | null> => {
   const jar = await cookies();
-  return decodeSession(jar.get(COOKIE_NAME)?.value);
-}
+  return verifySessionToken(jar.get(COOKIE_NAME)?.value);
+});
 
 /**
- * حارس دفاع إضافي (defense-in-depth) داخل الإجراءات الحسّاسة — الحارس
- * الأساسي هو middleware.ts، لكن هذا يمنع أي تنفيذ لو وصل الطلب من
- * مسار لم يغطّه الميدلوير لأي سبب مستقبلي (إعادة هيكلة، إلخ).
+ * حارس كل إجراء إداري على الخادم — لا يُكتفى بالميدلوير ولا بإخفاء الأزرار
+ * بالواجهة: الإجراءات (Server Actions) نقاط نهاية يمكن استدعاؤها مباشرة.
  */
 export async function requireAdmin(): Promise<SessionPayload> {
   const session = await getSession();
   if (!session) {
     throw new Error("غير مصرَّح — الرجاء تسجيل الدخول");
+  }
+  return session;
+}
+
+/**
+ * أول سطر في كل صفحة إدارية — لا يُكتفى بالتخطيط (layout): التنقّل الداخلي
+ * يجلب الصفحة وحدها دون إعادة تشغيل التخطيط. مُخزَّنة لكل طلب فلا تكلف استعلاماً إضافياً.
+ */
+export async function requireAdminPage(): Promise<SessionPayload> {
+  const session = await getSession();
+  if (!session) redirect("/admin/login");
+  return session;
+}
+
+/** للإجراءات الحسّاسة: إدارة المستخدمين، بيانات الدفع والحساب البنكي، سكربتات التتبّع. */
+export async function requireOwner(): Promise<SessionPayload> {
+  const session = await requireAdmin();
+  if (session.role !== AdminRole.OWNER) {
+    throw new Error("هذا الإجراء متاح لحساب المالك فقط");
   }
   return session;
 }

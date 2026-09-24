@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { startTransition, useActionState, useMemo, useState } from "react";
 import { Price } from "@/components/ui/Price";
 import { Button } from "@/components/ui/Button";
 import { createOrderAction, type CheckoutFormState } from "@/server/orders/actions";
@@ -40,6 +40,13 @@ export function CheckoutForm({
   bankSettings: BankTransferSettings;
 }) {
   const [state, formAction, isPending] = useActionState(createOrderAction, initialState);
+
+  /** إرسال يدوي: الإرسال التلقائي في React 19 يفرّغ النموذج (ومنه ملف الإيصال) حتى عند فشل التحقق. */
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter);
+    startTransition(() => formAction(formData));
+  }
   const [payment, setPayment] = useState<PaymentKey>("BANK_TRANSFER");
   const [copied, setCopied] = useState<string | null>(null);
   const [receiptName, setReceiptName] = useState<string | null>(null);
@@ -133,7 +140,7 @@ export function CheckoutForm({
 
       {/* الخطوة ٢: باقي بيانات التوصيل وطريقة الدفع، ثم إتمام الطلب فعلياً */}
       {step === 2 && (
-        <form action={formAction} className="mt-8 grid gap-8 lg:grid-cols-3">
+        <form action={formAction} onSubmit={handleSubmit} className="mt-8 grid gap-8 lg:grid-cols-3">
       <input type="hidden" name="shippingRateId" value={activeRateId ?? ""} />
       <div className="space-y-6 lg:col-span-2">
         <button type="button" onClick={() => setStep(1)} className="text-sm font-medium text-brand-700 hover:underline">

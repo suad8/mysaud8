@@ -5,17 +5,25 @@ import { db } from "@/server/db";
 import { getCartSessionId, getOrCreateCartSessionId } from "@/server/cart/session";
 import { getCartLines } from "@/server/cart/queries";
 import { validateCoupon } from "@/server/discounts/validate";
-import { saveUploadedFile, UploadError } from "@/lib/uploads";
+import { deleteUploadedFile, saveUploadedFile, UploadError } from "@/lib/uploads";
 import { parseCustomFieldDefs, type CustomFieldValue } from "@/server/products/custom-fields";
+import { getClientIp } from "@/lib/request-ip";
+import { createRateLimiter } from "@/lib/rate-limit";
 
 export type CartActionState = { error?: string; success?: boolean };
 
 const MAX_CUSTOM_TEXT_LENGTH = 1000;
 
-/** يقرأ قيم الحقول المخصّصة من النموذج حسب تعريفها بالمنتج، ويرفع أي ملفات مرفقة. */
+/** رفع ملفات العملاء متاح بلا تسجيل دخول — حدّ لكل IP يمنع ملء قرص الخادم بملفات متكررة. */
+const customFileUploads = createRateLimiter({ max: 20, windowMs: 60 * 60 * 1000 });
+
+/**
+ * يقرأ قيم الحقول المخصّصة من النموذج حسب تعريفها بالمنتج، ويرفع أي ملفات مرفقة.
+ * التحقق من كل الحقول أولاً ثم رفع الملفات — لا تبقى ملفات يتيمة على القرص عند فشل حقل آخر.
+ */
 async function readCustomFieldValues(formData: FormData, product: { customFields: unknown }): Promise<{ error: string } | { values: CustomFieldValue[] }> {
   const defs = parseCustomFieldDefs(product.customFields);
-  const values: CustomFieldValue[] = [];
+  const pending: ({ def: (typeof defs)[number]; text: string } | { def: (typeof defs)[number]; file: File })[] = [];
 
   for (const def of defs) {
     const raw = formData.get(`customField_${def.id}`);
@@ -25,12 +33,7 @@ async function readCustomFieldValues(formData: FormData, product: { customFields
         if (def.required) return { error: `يرجى إرفاق ملف لحقل "${def.label}"` };
         continue;
       }
-      try {
-        const url = await saveUploadedFile(raw, "custom-fields");
-        values.push({ label: def.label, type: def.type, value: url });
-      } catch (e) {
-        return { error: e instanceof UploadError ? e.message : `تعذّر رفع الملف لحقل "${def.label}"` };
-      }
+      pending.push({ def, file: raw });
     } else {
       const text = String(raw ?? "").trim();
       if (!text) {
@@ -40,7 +43,29 @@ async function readCustomFieldValues(formData: FormData, product: { customFields
       if (text.length > MAX_CUSTOM_TEXT_LENGTH) {
         return { error: `حقل "${def.label}" أطول من الحد المسموح (${MAX_CUSTOM_TEXT_LENGTH} حرف)` };
       }
-      values.push({ label: def.label, type: def.type, value: text });
+      pending.push({ def, text });
+    }
+  }
+
+  const ip = (await getClientIp()) ?? "unknown";
+  const values: CustomFieldValue[] = [];
+  const saved: string[] = [];
+  for (const item of pending) {
+    if ("text" in item) {
+      values.push({ label: item.def.label, type: item.def.type, value: item.text });
+      continue;
+    }
+    const fail = async (error: string) => {
+      await Promise.all(saved.map(deleteUploadedFile));
+      return { error };
+    };
+    if (!customFileUploads.hit(ip)) return fail("عدد كبير من الملفات المرفوعة خلال وقت قصير — حاول لاحقاً");
+    try {
+      const url = await saveUploadedFile(item.file, "custom-fields");
+      saved.push(url);
+      values.push({ label: item.def.label, type: item.def.type, value: url });
+    } catch (e) {
+      return fail(e instanceof UploadError ? e.message : `تعذّر رفع الملف لحقل "${item.def.label}"`);
     }
   }
 
