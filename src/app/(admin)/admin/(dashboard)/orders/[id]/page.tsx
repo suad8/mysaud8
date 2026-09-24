@@ -111,6 +111,9 @@ export default async function AdminOrderDetailPage({ params }: Props) {
             <p className="mt-3 text-sm font-medium">{order.customer?.name ?? order.shipToName}</p>
             <p className="num mt-1 text-sm text-muted">{order.phone}</p>
             {order.email && <p className="mt-0.5 text-sm text-muted">{order.email}</p>}
+            {order.taxNumber && (
+              <p className="num mt-0.5 text-sm text-muted">الرقم الضريبي: {order.taxNumber}</p>
+            )}
             {order.customer && (
               <Link href={`/admin/customers/${order.customer.id}`} className="mt-3 inline-block text-xs font-medium text-brand-700 hover:underline">
                 عرض ملف العميل ←

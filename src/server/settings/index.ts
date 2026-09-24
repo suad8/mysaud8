@@ -153,3 +153,34 @@ export function getSeoMarketingSettings() {
 export function saveSeoMarketingSettings(value: SeoMarketingSettings) {
   return setSetting("marketing.google", value);
 }
+
+/** إظهار/إخفاء أقسام الصفحة الرئيسية — تحكّم كامل بتصميم المتجر دون لمس الكود. */
+export type HomepageSectionsSettings = {
+  hero: boolean;
+  trustBar: boolean;
+  categories: boolean;
+  featured: boolean;
+  bundle: boolean;
+  testimonials: boolean;
+  arrivals: boolean;
+  finalCta: boolean;
+};
+
+const HOMEPAGE_SECTIONS_DEFAULTS: HomepageSectionsSettings = {
+  hero: true,
+  trustBar: true,
+  categories: true,
+  featured: true,
+  bundle: true,
+  testimonials: true,
+  arrivals: true,
+  finalCta: true,
+};
+
+export function getHomepageSections() {
+  return getSetting<HomepageSectionsSettings>("content.homepageSections", HOMEPAGE_SECTIONS_DEFAULTS);
+}
+
+export function saveHomepageSections(value: HomepageSectionsSettings) {
+  return setSetting("content.homepageSections", value);
+}

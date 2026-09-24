@@ -10,9 +10,11 @@ import {
   getStoreInfoSettings,
   saveBankTransferSettings,
   saveHeroContent,
+  saveHomepageSections,
   saveMoyasarSettings,
   saveSeoMarketingSettings,
   saveStoreInfoSettings,
+  type HomepageSectionsSettings,
 } from "@/server/settings";
 
 export async function updateBankSettingsAction(formData: FormData) {
@@ -154,4 +156,20 @@ export async function updateSeoMarketingAction(
   revalidatePath("/admin/settings");
   revalidatePath("/", "layout");
   return {};
+}
+
+const HOMEPAGE_SECTION_KEYS = ["hero", "trustBar", "categories", "featured", "bundle", "testimonials", "arrivals", "finalCta"] as const;
+
+export async function updateHomepageSectionsAction(formData: FormData) {
+  const session = await requireAdmin();
+
+  const value = Object.fromEntries(
+    HOMEPAGE_SECTION_KEYS.map((key) => [key, formData.get(key) === "on"]),
+  ) as HomepageSectionsSettings;
+
+  await saveHomepageSections(value);
+  await logAudit({ actorId: session.sub, action: "settings.homepageSections.updated", entity: "Setting", entityId: "content.homepageSections", diff: value });
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/");
 }

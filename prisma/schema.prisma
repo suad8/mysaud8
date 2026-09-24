@@ -290,6 +290,8 @@ model Order {
 
   couponCode  String?
   customerNote String?
+  /// الرقم الضريبي الاختياري للعميل — لإصدار فاتورة ضريبية للشركات، لا يغيّر المبلغ المدفوع
+  taxNumber   String?
   /// ملاحظات الموظفين — لا تظهر للعميل
   internalNote String?
 

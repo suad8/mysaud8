@@ -166,6 +166,15 @@ export function CheckoutForm({
             />
             <Field name="district" label="الحي (اختياري)" placeholder="حي النخيل" defaultValue={state.values?.district} />
             <Field name="street" label="العنوان التفصيلي" placeholder="اسم الشارع، رقم المبنى" className="sm:col-span-2" defaultValue={state.values?.street} error={err("street")} />
+            <Field
+              name="taxNumber"
+              label="الرقم الضريبي (اختياري — لإصدار فاتورة ضريبية)"
+              placeholder="15 رقماً"
+              inputMode="numeric"
+              className="num sm:col-span-2"
+              defaultValue={state.values?.taxNumber}
+              error={err("taxNumber")}
+            />
             <Field name="notes" label="ملاحظات إضافية (اختياري)" placeholder="تفاصيل توصيل إضافية" className="sm:col-span-2" defaultValue={state.values?.notes} />
           </div>
         </section>

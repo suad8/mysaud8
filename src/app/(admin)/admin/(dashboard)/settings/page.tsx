@@ -9,8 +9,8 @@ import { SeoMarketingForm } from "@/components/admin/SeoMarketingForm";
 import { db } from "@/server/db";
 import { getSession } from "@/server/auth/session";
 import { AdminRole } from "@prisma/client";
-import { getBankTransferSettings, getHeroContent, getMoyasarSettings, getSeoMarketingSettings, getStoreInfoSettings, maskSecret } from "@/server/settings";
-import { updateBankSettingsAction, updateGatewaySettingsAction } from "@/server/settings/actions";
+import { getBankTransferSettings, getHeroContent, getHomepageSections, getMoyasarSettings, getSeoMarketingSettings, getStoreInfoSettings, maskSecret } from "@/server/settings";
+import { updateBankSettingsAction, updateGatewaySettingsAction, updateHomepageSectionsAction } from "@/server/settings/actions";
 import { CURRENCY, SITE_URL, TAX_RATE } from "@/lib/constants";
 
 const CURRENCY_LABEL = CURRENCY === "SAR" ? "ريال سعودي (SAR)" : CURRENCY;
@@ -65,12 +65,13 @@ export default async function AdminSettingsPage() {
   const session = await getSession();
   if (!session) redirect("/admin/login");
 
-  const [bank, gateway, storeInfo, hero, seo, users] = await Promise.all([
+  const [bank, gateway, storeInfo, hero, seo, homepageSections, users] = await Promise.all([
     getBankTransferSettings(),
     getMoyasarSettings(),
     getStoreInfoSettings(),
     getHeroContent(),
     getSeoMarketingSettings(),
+    getHomepageSections(),
     db.adminUser.findMany({
       orderBy: { lastLoginAt: "desc" },
       select: { id: true, name: true, email: true, role: true, isActive: true, lastLoginAt: true },
@@ -89,12 +90,34 @@ export default async function AdminSettingsPage() {
           <HeroBannerForm hero={hero} />
         </Section>
 
+        <form action={updateHomepageSectionsAction} className="lg:col-span-2">
+          <Section title="أقسام الصفحة الرئيسية" desc="تحكّم بإظهار أو إخفاء أي قسم من تصميم المتجر مباشرة — دون حذف بياناته.">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ToggleRow name="hero" label="البانر الرئيسي" defaultChecked={homepageSections.hero} />
+              <ToggleRow name="trustBar" label="شريط الثقة (شحن، دفع، ضمان)" defaultChecked={homepageSections.trustBar} />
+              <ToggleRow name="categories" label="التصنيفات" defaultChecked={homepageSections.categories} />
+              <ToggleRow name="featured" label="المنتجات المميزة" defaultChecked={homepageSections.featured} />
+              <ToggleRow name="bundle" label="بندل العرض الترويجي" defaultChecked={homepageSections.bundle} />
+              <ToggleRow name="testimonials" label="آراء العملاء" defaultChecked={homepageSections.testimonials} />
+              <ToggleRow name="arrivals" label="وصل حديثاً" defaultChecked={homepageSections.arrivals} />
+              <ToggleRow name="finalCta" label="دعوة الإجراء الأخيرة" defaultChecked={homepageSections.finalCta} />
+            </div>
+            <div className="flex justify-end">
+              <Button type="submit" size="sm">حفظ أقسام الصفحة</Button>
+            </div>
+          </Section>
+        </form>
+
         <Section title="الضريبة والعملة">
           <Field name="taxRate" label="نسبة ضريبة القيمة المضافة" defaultValue={`${(TAX_RATE * 100).toFixed(0)}`} unit="%" disabled />
           <Field name="currency" label="العملة" defaultValue={CURRENCY_LABEL} disabled />
           <label className="flex items-center gap-2.5 text-sm text-muted">
             <input type="checkbox" defaultChecked disabled className="h-4 w-4 accent-brand-600" />
             الأسعار المعروضة شاملة الضريبة
+          </label>
+          <label className="flex items-center gap-2.5 text-sm text-muted">
+            <input type="checkbox" defaultChecked disabled className="h-4 w-4 accent-brand-600" />
+            يمكن للعميل إضافة رقمه الضريبي اختيارياً عند الدفع (لفاتورة ضريبية)
           </label>
           <p className="text-[11px] text-muted">
             * تُضبط نسبة الضريبة والعملة عبر متغيّرات البيئة على الخادم (وليس من هنا) لأسباب امتثال ضريبي — أي

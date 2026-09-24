@@ -19,7 +19,10 @@ export type CheckoutContactValues = {
   district?: string;
   street?: string;
   notes?: string;
+  taxNumber?: string;
 };
+
+const TAX_NUMBER_PATTERN = /^\d{15}$/;
 
 export type CheckoutFormState = {
   error?: string;
@@ -52,6 +55,7 @@ function readContactValues(formData: FormData): CheckoutContactValues {
     district: String(formData.get("district") ?? ""),
     street: String(formData.get("street") ?? ""),
     notes: String(formData.get("notes") ?? ""),
+    taxNumber: String(formData.get("taxNumber") ?? ""),
   };
 }
 
@@ -75,6 +79,11 @@ export async function createOrderAction(
   const fieldErrors: Record<string, string> = {};
   for (const [key, label] of REQUIRED) {
     if (!String(formData.get(key) ?? "").trim()) fieldErrors[key] = `${label} مطلوب`;
+  }
+
+  const taxNumberRaw = String(formData.get("taxNumber") ?? "").trim();
+  if (taxNumberRaw && !TAX_NUMBER_PATTERN.test(taxNumberRaw)) {
+    fieldErrors.taxNumber = "الرقم الضريبي يجب أن يتكوّن من 15 رقماً";
   }
 
   const paymentMethod = formData.get("paymentMethod");
@@ -119,6 +128,7 @@ export async function createOrderAction(
         district: String(formData.get("district") ?? "") || undefined,
         street: String(formData.get("street")),
         notes: String(formData.get("notes") ?? "") || undefined,
+        taxNumber: taxNumberRaw || undefined,
       },
       shippingRateId,
       paymentMethod,

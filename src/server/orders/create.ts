@@ -41,6 +41,8 @@ export type CheckoutContact = {
   district?: string;
   street: string;
   notes?: string;
+  /** الرقم الضريبي الاختياري — لإصدار فاتورة ضريبية للشركات */
+  taxNumber?: string;
 };
 
 export type CreateOrderInput = {
@@ -109,6 +111,7 @@ export async function createOrderFromCheckout(input: CreateOrderInput) {
             shipToDistrict: contact.district || null,
             shipToStreet: contact.street,
             shipToDetails: contact.notes || null,
+            taxNumber: contact.taxNumber || null,
             subtotal: totals.subtotal,
             discountTotal: totals.discountTotal,
             shippingTotal: totals.shippingTotal,

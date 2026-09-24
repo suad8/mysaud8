@@ -12,7 +12,7 @@ import {
   getPromoProduct,
   getTestimonials,
 } from "@/server/catalog/queries";
-import { getHeroContent, getStoreInfoSettings } from "@/server/settings";
+import { getHeroContent, getHomepageSections, getStoreInfoSettings } from "@/server/settings";
 import { formatNumber } from "@/lib/format";
 import { toJsonLd } from "@/lib/json-ld";
 import { SITE_URL } from "@/lib/constants";
@@ -33,7 +33,7 @@ const TRUST = [
 const AVATAR_COLORS = ["bg-brand-500", "bg-accent-500", "bg-brand-300"];
 
 export default async function HomePage() {
-  const [featured, arrivals, categories, testimonials, bundle, productCount, hero, storeInfo] = await Promise.all([
+  const [featured, arrivals, categories, testimonials, bundle, productCount, hero, storeInfo, sections] = await Promise.all([
     getFeaturedProducts(8),
     getNewArrivals(4),
     getCategories(),
@@ -42,6 +42,7 @@ export default async function HomePage() {
     getActiveProductCount(),
     getHeroContent(),
     getStoreInfoSettings(),
+    getHomepageSections(),
   ]);
 
   const organizationJsonLd = {
@@ -76,6 +77,7 @@ export default async function HomePage() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: toJsonLd(websiteJsonLd) }} />
 
       {/* ── البانر الرئيسي ─────────────────────────────────── */}
+      {sections.hero && (
       <section className="relative overflow-hidden bg-brand-50 dark:bg-ink-950">
         <div aria-hidden className="blob -end-32 -top-40 h-96 w-96 bg-brand-100 dark:bg-brand-950/60" />
         <div aria-hidden className="blob -start-24 bottom-0 h-72 w-72 bg-accent-100 dark:bg-accent-900/20" />
@@ -154,8 +156,10 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+      )}
 
       {/* ── شريط الثقة ─────────────────────────────────────── */}
+      {sections.trustBar && (
       <section className="border-b bg-[var(--surface-raised)]">
         <div className="mx-auto grid max-w-7xl grid-cols-2 gap-px px-4 lg:grid-cols-4">
           {TRUST.map((t) => (
@@ -173,8 +177,10 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
+      )}
 
       {/* ── التصنيفات ──────────────────────────────────────── */}
+      {sections.categories && (
       <section className="mx-auto max-w-7xl px-4 py-14">
         <div className="flex items-end justify-between gap-4">
           <div>
@@ -198,9 +204,10 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
+      )}
 
       {/* ── المنتجات المميزة ───────────────────────────────── */}
-      {featured.length > 0 && (
+      {sections.featured && featured.length > 0 && (
         <section className="mx-auto max-w-7xl px-4 pb-14">
           <div className="flex items-end justify-between gap-4">
             <div>
@@ -220,7 +227,7 @@ export default async function HomePage() {
       )}
 
       {/* ── بندل العرض ─────────────────────────────────────── */}
-      {bundle && (
+      {sections.bundle && bundle && (
         <section className="mx-auto max-w-7xl px-4 pb-14">
           <div className="surface-card relative overflow-hidden bg-brand-900 text-white">
             <div aria-hidden className="blob -end-20 -top-20 h-64 w-64 bg-brand-700/60" />
@@ -250,7 +257,7 @@ export default async function HomePage() {
       )}
 
       {/* ── آراء العملاء ───────────────────────────────────── */}
-      {testimonials.length > 0 && (
+      {sections.testimonials && testimonials.length > 0 && (
         <section className="mx-auto max-w-7xl px-4 pb-14">
           <div className="text-center">
             <span className="inline-flex items-center gap-2 rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700 dark:bg-brand-950 dark:text-brand-300">
@@ -279,7 +286,7 @@ export default async function HomePage() {
       )}
 
       {/* ── وصل حديثاً ─────────────────────────────────────── */}
-      {arrivals.length > 0 && (
+      {sections.arrivals && arrivals.length > 0 && (
         <section className="mx-auto max-w-7xl px-4 pb-14">
           <h2 className="text-2xl font-extrabold tracking-tight">وصل حديثاً</h2>
           <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -291,6 +298,7 @@ export default async function HomePage() {
       )}
 
       {/* ── دعوة أخيرة ─────────────────────────────────────── */}
+      {sections.finalCta && (
       <section className="relative overflow-hidden bg-brand-50 py-16 text-center dark:bg-ink-950">
         <div aria-hidden className="blob start-1/2 top-0 h-[120%] w-[140%] -translate-x-1/2 rtl:translate-x-1/2 bg-gradient-to-b from-brand-100 to-transparent dark:from-brand-950/50" />
         <div className="relative mx-auto max-w-2xl px-4">
@@ -306,6 +314,7 @@ export default async function HomePage() {
           </Button>
         </div>
       </section>
+      )}
     </>
   );
 }
