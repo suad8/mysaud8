@@ -39,7 +39,16 @@ async function callGemini(model: string, modelEnv: string, body: object): Promis
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    if (res.status === 429) throw new AiImageError("تجاوزت حد الاستخدام في Gemini — انتظر قليلاً أو راجع الفوترة في Google AI Studio");
+    if (res.status === 429) {
+      // قوقل تحدد السبب في نص الرد: حصة صفر = النموذج غير مشمول بالخطة المجانية أصلاً
+      if (/limit:\s*0\b|"quotaValue":\s*"0"/.test(text)) {
+        throw new AiImageError("الخطة المجانية في Gemini لا تشمل هذه الميزة — فعّل الفوترة (Billing) في Google AI Studio ثم أعد المحاولة");
+      }
+      if (/free_?tier/i.test(text)) {
+        throw new AiImageError("انتهت الحصة المجانية لـ Gemini لليوم أو للدقيقة — انتظر قليلاً، أو فعّل الفوترة في Google AI Studio لرفع الحد");
+      }
+      throw new AiImageError("تجاوزت حد الاستخدام في Gemini — انتظر قليلاً أو راجع الفوترة في Google AI Studio");
+    }
     if (res.status === 401 || res.status === 403 || /API_KEY_INVALID|API key not valid/i.test(text)) {
       throw new AiImageError("مفتاح Gemini غير صالح أو لا يملك الصلاحية (قد يلزم تفعيل الفوترة في Google AI Studio)");
     }
