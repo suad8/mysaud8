@@ -5,7 +5,9 @@ import { requireAdmin } from "@/server/auth/session";
 import { logAudit } from "@/server/audit/log";
 import { createRateLimiter } from "@/lib/rate-limit";
 import { readValidatedImage, saveJpegBuffer, UploadError } from "@/lib/uploads";
-import { AiImageError, generateImage } from "@/server/ai/gemini";
+import { AiImageError, generateImage, generateJson } from "@/server/ai/gemini";
+import { getStoreInfoSettings } from "@/server/settings";
+import { sanitizeOptionGroups } from "@/lib/product-options";
 
 export type AiImageStyle = "studio" | "lifestyle" | "logo";
 export type AiImageState = { error?: string; imageUrl?: string };
@@ -67,5 +69,87 @@ export async function generateProductImageAction(formData: FormData): Promise<Ai
     if (e instanceof AiImageError) return { error: e.message };
     console.error("[ai-image] failed:", e instanceof Error ? e.name : "unknown");
     return { error: "حدث خطأ أثناء معالجة الصورة — حاول مرة أخرى" };
+  }
+}
+
+export type AiCopyTone = "professional" | "friendly";
+export type AiCopyState = { error?: string; shortDesc?: string; description?: string };
+
+/** النصوص أرخص كثيراً من الصور — حد سخي يمنع فقط الاستخدام الآلي غير المقصود. */
+const copyGenerations = createRateLimiter({ max: 60, windowMs: 60 * 60 * 1000 });
+
+const COPY_SCHEMA = {
+  type: "OBJECT",
+  properties: { shortDesc: { type: "STRING" }, description: { type: "STRING" } },
+  required: ["shortDesc", "description"],
+};
+
+/** تنظيف ما يرجعه النموذج: بلا تنسيق Markdown، أسطر مرتبة، وأطوال محدودة. */
+function cleanCopy(text: unknown, max: number): string {
+  if (typeof text !== "string") return "";
+  return text
+    .replace(/\*\*|__|`|^#+\s*/gm, "")
+    .replace(/^\s*[-*]\s+/gm, "• ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, max);
+}
+
+/**
+ * يكتب «الوصف المختصر» و«الوصف الكامل» للمنتج بالعربية من اسمه وتصنيفه وخياراته
+ * وملاحظات المدير — للمعاينة فقط، ولا يُحفظ شيء إلا إن اختاره المدير وحفظ المنتج.
+ */
+export async function generateProductCopyAction(input: {
+  name: unknown;
+  category?: unknown;
+  optionGroups?: unknown;
+  details?: unknown;
+  tone?: unknown;
+}): Promise<AiCopyState> {
+  const session = await requireAdmin();
+  const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+  const name = str(input?.name, 120);
+  if (!name) return { error: "اكتب اسم المنتج أولاً" };
+  const category = str(input?.category, 80);
+  const details = str(input?.details, 600);
+  const tone: AiCopyTone = input?.tone === "friendly" ? "friendly" : "professional";
+  let groups: ReturnType<typeof sanitizeOptionGroups> = [];
+  try {
+    groups = sanitizeOptionGroups(typeof input?.optionGroups === "string" ? JSON.parse(input.optionGroups) : []);
+  } catch {
+    groups = [];
+  }
+  const options = groups.map((g) => `${g.name}: ${g.values.join("، ")}`).join("؛ ");
+
+  if (!copyGenerations.hit(session.sub)) return { error: "بلغت حد كتابة الأوصاف (60 في الساعة) — حاول لاحقاً" };
+
+  const store = await getStoreInfoSettings();
+  const prompt = [
+    `أنت كاتب محتوى تسويقي محترف لمتجر إلكتروني سعودي اسمه «${store.name}»${store.tagline ? ` (${store.tagline})` : ""}.`,
+    `اكتب وصفاً بالعربية لمنتج اسمه: «${name}».`,
+    category ? `التصنيف: ${category}.` : "",
+    options ? `الخيارات المتاحة للعميل: ${options}.` : "",
+    details ? `معلومات من صاحب المتجر (اعتمد عليها): ${details}` : "",
+    tone === "friendly" ? "الأسلوب: ودّي وتسويقي قريب من العميل السعودي، بعربية فصحى سهلة." : "الأسلوب: احترافي وواضح بعربية فصحى سهلة.",
+    "المطلوب:",
+    "- shortDesc: جملة واحدة جذابة بين 60 و140 حرفاً تُعرض تحت اسم المنتج.",
+    "- description: وصف كامل بين 80 و180 كلمة: فقرة افتتاحية قصيرة، ثم 3 إلى 5 مميزات كل واحدة في سطر يبدأ بـ «• »، ثم سطر أخير عن الاستخدامات أو الجهات المناسبة.",
+    "قواعد صارمة: لا تخترع أرقاماً أو مقاسات أو أسعاراً أو مدة توصيل أو ضمانات لم تُذكر أعلاه. لا إيموجي، لا عناوين، لا تنسيق Markdown، ولا تذكر أنك ذكاء اصطناعي.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  try {
+    const out = await generateJson<{ shortDesc?: unknown; description?: unknown }>(prompt, COPY_SCHEMA);
+    const shortDesc = cleanCopy(out.shortDesc, 200).replace(/\n+/g, " ");
+    const description = cleanCopy(out.description, 3000);
+    if (!shortDesc || !description) return { error: "لم يُرجع Gemini وصفاً كاملاً هذه المرة — حاول مرة أخرى" };
+    await logAudit({ actorId: session.sub, action: "ai.copyGenerated", entity: "Product", diff: { name, tone } });
+    return { shortDesc, description };
+  } catch (e) {
+    if (e instanceof AiImageError) return { error: e.message };
+    console.error("[ai-copy] failed:", e instanceof Error ? e.name : "unknown");
+    return { error: "حدث خطأ أثناء كتابة الوصف — حاول مرة أخرى" };
   }
 }

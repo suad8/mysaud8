@@ -43,6 +43,7 @@ const ACTION_LABEL: Record<string, string> = {
   "theme.updated": "تحديث الثيم",
   "home.updated": "تحديث تصميم الصفحة الرئيسية",
   "orders.exported": "تصدير الطلبات (Excel)",
+  "ai.copyGenerated": "كتابة وصف منتج بالذكاء الاصطناعي",
   "order.noteUpdated": "تعديل ملاحظة داخلية على طلب",
   "products.bulkUpdated": "تعديل جماعي للمنتجات",
   "settings.maintenance.updated": "تغيير وضع الصيانة",

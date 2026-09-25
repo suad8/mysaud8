@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import type { ProductFormState } from "@/server/products/actions";
 import type { CustomFieldDef, CustomFieldType } from "@/server/products/custom-fields";
 import { AiImageGenerator } from "@/components/admin/AiImageGenerator";
+import { AiCopyGenerator } from "@/components/admin/AiCopyGenerator";
 import { OptionsEditor } from "@/components/admin/OptionsEditor";
 import type { OptionGroup, OptionSelection } from "@/lib/product-options";
 import { PROMO_COLORS, PROMO_TITLE_MAX, promoClass } from "@/lib/promo";
@@ -162,6 +163,22 @@ export function ProductForm({
                   className="w-full rounded-xl border bg-transparent px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-brand-500/40"
                 />
               </label>
+              <AiCopyGenerator
+                enabled={aiEnabled}
+                getContext={() => {
+                  const form = formRef.current;
+                  const category = form?.querySelector<HTMLSelectElement>('select[name="categoryId"]');
+                  return {
+                    name: form?.querySelector<HTMLInputElement>('input[name="nameAr"]')?.value ?? "",
+                    category: category?.value ? (category.selectedOptions[0]?.text ?? "") : "",
+                    optionGroups: form?.querySelector<HTMLInputElement>('input[name="optionGroups"]')?.value ?? "",
+                  };
+                }}
+                fill={(field, value) => {
+                  const el = formRef.current?.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${field}"]`);
+                  if (el) el.value = value;
+                }}
+              />
             </div>
           </section>
 
