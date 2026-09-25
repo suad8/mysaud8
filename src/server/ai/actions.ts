@@ -5,14 +5,16 @@ import { requireAdmin } from "@/server/auth/session";
 import { logAudit } from "@/server/audit/log";
 import { createRateLimiter } from "@/lib/rate-limit";
 import { readValidatedImage, saveJpegBuffer, UploadError } from "@/lib/uploads";
-import { AiImageError, generateImage, generateJson } from "@/server/ai/gemini";
+import { generateImage, generateJson } from "@/server/ai/gemini";
+import { openAiGenerateImage, openAiGenerateJson } from "@/server/ai/openai";
+import { AiError, AI_PROVIDER_LABEL, resolveProvider, type AiProvider } from "@/server/ai/providers";
 import { getStoreInfoSettings } from "@/server/settings";
 import { sanitizeOptionGroups } from "@/lib/product-options";
 
 export type AiImageStyle = "studio" | "lifestyle" | "logo";
 export type AiImageState = { error?: string; imageUrl?: string };
 
-/** كل صورة لها تكلفة في Gemini — حد لكل مدير يمنع الاستهلاك غير المقصود. */
+/** كل صورة لها تكلفة لدى مزوّد الذكاء الاصطناعي — حد لكل مدير يمنع الاستهلاك غير المقصود. */
 const generations = createRateLimiter({ max: 30, windowMs: 60 * 60 * 1000 });
 
 const BRAND = "Use the brand colors royal purple (#663DFF) and golden yellow (#FFC430) tastefully in the design.";
@@ -32,7 +34,7 @@ function buildPrompt(style: AiImageStyle, name: string, details: string, brandCo
 }
 
 /**
- * يولّد صورة منتج بـ Gemini ويحفظها (1200×1200 JPEG) — تُعاد للنموذج كمعاينة،
+ * يولّد صورة منتج (Gemini أو ChatGPT حسب اختيار المدير) ويحفظها (1200×1200 JPEG) — تُعاد للنموذج كمعاينة،
  * ولا تُربط بالمنتج إلا إن اختارها المدير وحفظ المنتج.
  */
 export async function generateProductImageAction(formData: FormData): Promise<AiImageState> {
@@ -58,15 +60,23 @@ export async function generateProductImageAction(formData: FormData): Promise<Ai
 
   if (!generations.hit(session.sub)) return { error: "بلغت حد التوليد (30 صورة في الساعة) — حاول لاحقاً" };
 
+  let provider: AiProvider;
   try {
-    const raw = await generateImage({ prompt: buildPrompt(style, name, details, brandColors), referenceImage });
+    provider = resolveProvider(formData.get("provider"));
+  } catch (e) {
+    return { error: e instanceof AiError ? e.message : "الذكاء الاصطناعي غير مفعّل" };
+  }
+
+  try {
+    const prompt = buildPrompt(style, name, details, brandColors);
+    const raw = provider === "openai" ? await openAiGenerateImage({ prompt, referenceImage }) : await generateImage({ prompt, referenceImage });
     // توحيد المقاس والصيغة وإزالة أي بيانات وصفية مضمّنة
     const jpeg = await sharp(raw).rotate().resize(1200, 1200, { fit: "cover" }).jpeg({ quality: 88, mozjpeg: true }).toBuffer();
     const imageUrl = await saveJpegBuffer(jpeg, "products");
-    await logAudit({ actorId: session.sub, action: "ai.imageGenerated", entity: "Product", diff: { name, style } });
+    await logAudit({ actorId: session.sub, action: "ai.imageGenerated", entity: "Product", diff: { name, style, provider } });
     return { imageUrl };
   } catch (e) {
-    if (e instanceof AiImageError) return { error: e.message };
+    if (e instanceof AiError) return { error: e.message };
     console.error("[ai-image] failed:", e instanceof Error ? e.name : "unknown");
     return { error: "حدث خطأ أثناء معالجة الصورة — حاول مرة أخرى" };
   }
@@ -78,11 +88,7 @@ export type AiCopyState = { error?: string; shortDesc?: string; description?: st
 /** النصوص أرخص كثيراً من الصور — حد سخي يمنع فقط الاستخدام الآلي غير المقصود. */
 const copyGenerations = createRateLimiter({ max: 60, windowMs: 60 * 60 * 1000 });
 
-const COPY_SCHEMA = {
-  type: "OBJECT",
-  properties: { shortDesc: { type: "STRING" }, description: { type: "STRING" } },
-  required: ["shortDesc", "description"],
-};
+const COPY_FIELDS = ["shortDesc", "description"];
 
 /** تنظيف ما يرجعه النموذج: بلا تنسيق Markdown، أسطر مرتبة، وأطوال محدودة. */
 function cleanCopy(text: unknown, max: number): string {
@@ -106,6 +112,7 @@ export async function generateProductCopyAction(input: {
   optionGroups?: unknown;
   details?: unknown;
   tone?: unknown;
+  provider?: unknown;
 }): Promise<AiCopyState> {
   const session = await requireAdmin();
   const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -124,6 +131,13 @@ export async function generateProductCopyAction(input: {
 
   if (!copyGenerations.hit(session.sub)) return { error: "بلغت حد كتابة الأوصاف (60 في الساعة) — حاول لاحقاً" };
 
+  let provider: AiProvider;
+  try {
+    provider = resolveProvider(input?.provider);
+  } catch (e) {
+    return { error: e instanceof AiError ? e.message : "الذكاء الاصطناعي غير مفعّل" };
+  }
+
   const store = await getStoreInfoSettings();
   const prompt = [
     `أنت كاتب محتوى تسويقي محترف لمتجر إلكتروني سعودي اسمه «${store.name}»${store.tagline ? ` (${store.tagline})` : ""}.`,
@@ -141,14 +155,15 @@ export async function generateProductCopyAction(input: {
     .join("\n");
 
   try {
-    const out = await generateJson<{ shortDesc?: unknown; description?: unknown }>(prompt, COPY_SCHEMA);
+    type Copy = { shortDesc?: unknown; description?: unknown };
+    const out = provider === "openai" ? await openAiGenerateJson<Copy>(prompt, COPY_FIELDS) : await generateJson<Copy>(prompt, COPY_FIELDS);
     const shortDesc = cleanCopy(out.shortDesc, 200).replace(/\n+/g, " ");
     const description = cleanCopy(out.description, 3000);
-    if (!shortDesc || !description) return { error: "لم يُرجع Gemini وصفاً كاملاً هذه المرة — حاول مرة أخرى" };
-    await logAudit({ actorId: session.sub, action: "ai.copyGenerated", entity: "Product", diff: { name, tone } });
+    if (!shortDesc || !description) return { error: `لم يُرجع ${AI_PROVIDER_LABEL[provider]} وصفاً كاملاً هذه المرة — حاول مرة أخرى` };
+    await logAudit({ actorId: session.sub, action: "ai.copyGenerated", entity: "Product", diff: { name, tone, provider } });
     return { shortDesc, description };
   } catch (e) {
-    if (e instanceof AiImageError) return { error: e.message };
+    if (e instanceof AiError) return { error: e.message };
     console.error("[ai-copy] failed:", e instanceof Error ? e.name : "unknown");
     return { error: "حدث خطأ أثناء كتابة الوصف — حاول مرة أخرى" };
   }

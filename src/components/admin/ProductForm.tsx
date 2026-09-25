@@ -7,6 +7,7 @@ import type { ProductFormState } from "@/server/products/actions";
 import type { CustomFieldDef, CustomFieldType } from "@/server/products/custom-fields";
 import { AiImageGenerator } from "@/components/admin/AiImageGenerator";
 import { AiCopyGenerator } from "@/components/admin/AiCopyGenerator";
+import type { AiProvider } from "@/server/ai/providers";
 import { OptionsEditor } from "@/components/admin/OptionsEditor";
 import type { OptionGroup, OptionSelection } from "@/lib/product-options";
 import { PROMO_COLORS, PROMO_TITLE_MAX, promoClass } from "@/lib/promo";
@@ -75,14 +76,14 @@ export function ProductForm({
   action,
   categories,
   initial,
-  aiEnabled = false,
+  aiProviders = [],
 }: {
   mode: "create" | "edit";
   action: Action;
   categories: Category[];
   initial?: ProductFormInitial;
-  /** توليد الصور بـ Gemini مفعّل (GEMINI_API_KEY مضبوط على الخادم) */
-  aiEnabled?: boolean;
+  /** مزوّدو الذكاء الاصطناعي المفعّلون (مفاتيحهم في Railway) — فارغ = الميزة معطّلة */
+  aiProviders?: AiProvider[];
 }) {
   const data = initial ?? EMPTY;
   const [state, formAction, isPending] = useActionState(action, {});
@@ -164,7 +165,7 @@ export function ProductForm({
                 />
               </label>
               <AiCopyGenerator
-                enabled={aiEnabled}
+                providers={aiProviders}
                 getContext={() => {
                   const form = formRef.current;
                   const category = form?.querySelector<HTMLSelectElement>('select[name="categoryId"]');
@@ -220,7 +221,7 @@ export function ProductForm({
             {err("image") && <p className="mt-2 text-xs text-red-600">{err("image")}</p>}
             <p className="mt-2 text-[11px] text-muted">JPG أو PNG أو WEBP، حتى 5 ميغابايت.</p>
             <AiImageGenerator
-              enabled={aiEnabled}
+              providers={aiProviders}
               getProductName={() => formRef.current?.querySelector<HTMLInputElement>('input[name="nameAr"]')?.value ?? ""}
             />
           </section>

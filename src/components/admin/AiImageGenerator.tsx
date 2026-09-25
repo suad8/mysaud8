@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import Image from "next/image";
 import { generateProductImageAction, type AiImageStyle } from "@/server/ai/actions";
+import { AiProviderPicker, useAiProvider } from "@/components/admin/AiProviderPicker";
+import type { AiProvider } from "@/server/ai/providers";
 
 const STYLES: { value: AiImageStyle; label: string; hint: string }[] = [
   { value: "studio", label: "صورة منتج احترافية", hint: "خلفية استوديو نظيفة — الأنسب للمتجر" },
@@ -11,11 +13,11 @@ const STYLES: { value: AiImageStyle; label: string; hint: string }[] = [
 ];
 
 /**
- * توليد صورة المنتج بالذكاء الاصطناعي (Gemini) من اسم المنتج: معاينة، ثم
+ * توليد صورة المنتج بالذكاء الاصطناعي (Gemini أو ChatGPT) من اسم المنتج: معاينة، ثم
  * «استخدام هذه الصورة» يضعها في حقل مخفي فتُحفظ كصورة رئيسية مع المنتج.
  * ليس نموذجاً مستقلاً (لا نماذج متداخلة) — يستدعي الإجراء مباشرة.
  */
-export function AiImageGenerator({ enabled, getProductName }: { enabled: boolean; getProductName: () => string }) {
+export function AiImageGenerator({ providers, getProductName }: { providers: AiProvider[]; getProductName: () => string }) {
   const [open, setOpen] = useState(false);
   const [style, setStyle] = useState<AiImageStyle>("studio");
   const [details, setDetails] = useState("");
@@ -25,11 +27,13 @@ export function AiImageGenerator({ enabled, getProductName }: { enabled: boolean
   const [chosen, setChosen] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [provider, setProvider] = useAiProvider(providers);
 
-  if (!enabled) {
+  if (providers.length === 0) {
     return (
       <p className="mt-3 rounded-lg bg-[var(--surface-sunken)] px-3 py-2 text-[11px] text-muted">
-        ✨ توليد الصور بالذكاء الاصطناعي غير مفعّل — أضف مفتاح Gemini باسم <span dir="ltr" className="num">GEMINI_API_KEY</span> في متغيرات Railway.
+        ✨ توليد الصور بالذكاء الاصطناعي غير مفعّل — أضف مفتاح Gemini (<span dir="ltr" className="num">GEMINI_API_KEY</span>) أو ChatGPT (
+        <span dir="ltr" className="num">OPENAI_API_KEY</span>) في متغيرات Railway.
       </p>
     );
   }
@@ -44,6 +48,7 @@ export function AiImageGenerator({ enabled, getProductName }: { enabled: boolean
     fd.set("name", name);
     fd.set("details", details);
     fd.set("style", style);
+    if (provider) fd.set("provider", provider);
     if (brandColors) fd.set("brandColors", "on");
     if (reference) fd.set("reference", reference);
     setError(null);
@@ -79,9 +84,10 @@ export function AiImageGenerator({ enabled, getProductName }: { enabled: boolean
       ) : (
         <div className="space-y-4 rounded-xl border p-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold">✨ توليد صورة من اسم المنتج (Gemini)</p>
+            <p className="text-sm font-semibold">✨ توليد صورة من اسم المنتج</p>
             <button type="button" onClick={() => setOpen(false)} className="text-xs text-muted hover:underline">إغلاق</button>
           </div>
+          <AiProviderPicker providers={providers} value={provider} onChange={setProvider} />
 
           <div className="grid gap-2 sm:grid-cols-3">
             {STYLES.map((s) => (

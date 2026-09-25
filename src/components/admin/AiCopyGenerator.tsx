@@ -2,19 +2,21 @@
 
 import { useState, useTransition } from "react";
 import { generateProductCopyAction, type AiCopyTone } from "@/server/ai/actions";
+import { AiProviderPicker, useAiProvider } from "@/components/admin/AiProviderPicker";
+import type { AiProvider } from "@/server/ai/providers";
 
 type Context = { name: string; category: string; optionGroups: string };
 
 /**
- * كتابة «الوصف المختصر» و«الوصف الكامل» بالذكاء الاصطناعي (Gemini): معاينة
+ * كتابة «الوصف المختصر» و«الوصف الكامل» بالذكاء الاصطناعي (Gemini أو ChatGPT): معاينة
  * قابلة للتعديل، ثم «استخدام» يضع النص في حقول النموذج — يُحفظ فقط مع زر الحفظ.
  */
 export function AiCopyGenerator({
-  enabled,
+  providers,
   getContext,
   fill,
 }: {
-  enabled: boolean;
+  providers: AiProvider[];
   getContext: () => Context;
   fill: (field: "shortDescAr" | "descAr", value: string) => void;
 }) {
@@ -26,11 +28,13 @@ export function AiCopyGenerator({
   const [used, setUsed] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [provider, setProvider] = useAiProvider(providers);
 
-  if (!enabled) {
+  if (providers.length === 0) {
     return (
       <p className="rounded-lg bg-[var(--surface-sunken)] px-3 py-2 text-[11px] text-muted">
-        ✨ كتابة الوصف بالذكاء الاصطناعي غير مفعّلة — أضف مفتاح Gemini باسم <span dir="ltr" className="num">GEMINI_API_KEY</span> في متغيرات Railway.
+        ✨ كتابة الوصف بالذكاء الاصطناعي غير مفعّلة — أضف مفتاح Gemini (<span dir="ltr" className="num">GEMINI_API_KEY</span>) أو ChatGPT (
+        <span dir="ltr" className="num">OPENAI_API_KEY</span>) في متغيرات Railway.
       </p>
     );
   }
@@ -45,7 +49,7 @@ export function AiCopyGenerator({
     setUsed(null);
     startTransition(async () => {
       try {
-        const res = await generateProductCopyAction({ ...ctx, details, tone });
+        const res = await generateProductCopyAction({ ...ctx, details, tone, provider });
         if (res.error) setError(res.error);
         else {
           setShortDesc(res.shortDesc ?? "");
@@ -79,7 +83,7 @@ export function AiCopyGenerator({
   return (
     <div className="space-y-3 rounded-xl border p-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold">✨ كتابة الوصف من اسم المنتج (Gemini)</p>
+        <p className="text-sm font-semibold">✨ كتابة الوصف من اسم المنتج</p>
         <button type="button" onClick={() => setOpen(false)} className="text-xs text-muted hover:underline">إغلاق</button>
       </div>
       <label className="block text-sm">
@@ -93,6 +97,7 @@ export function AiCopyGenerator({
           className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500/40"
         />
       </label>
+      <AiProviderPicker providers={providers} value={provider} onChange={setProvider} />
       <div className="flex flex-wrap items-center gap-2 text-xs" role="radiogroup" aria-label="أسلوب الكتابة">
         <span className="text-muted">الأسلوب:</span>
         {(
