@@ -5,6 +5,7 @@ import { Price } from "@/components/ui/Price";
 import { Button } from "@/components/ui/Button";
 import { createOrderAction, type CheckoutFormState } from "@/server/orders/actions";
 import { saveCheckoutPhoneAction } from "@/server/cart/actions";
+import { normalizePhone } from "@/lib/phone";
 import { calculateTotals, type DiscountInput } from "@/server/cart/pricing";
 import { matchZoneForCity, type ShippingZoneWithRates } from "@/server/shipping/match";
 import type { BankTransferSettings } from "@/server/settings";
@@ -76,8 +77,10 @@ export function CheckoutForm({
     });
   }
 
+  const phoneInvalid = phone.trim() !== "" && !normalizePhone(phone);
+
   function goToDetails() {
-    if (!phone.trim()) {
+    if (!phone.trim() || phoneInvalid) {
       setPhoneTouched(true);
       return;
     }
@@ -124,10 +127,11 @@ export function CheckoutForm({
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   className={`h-12 w-full rounded-xl border bg-transparent px-3.5 outline-none transition-shadow focus:ring-2 ${
-                    phoneTouched && !phone.trim() ? "border-red-400 focus:ring-red-400/40" : "focus:ring-brand-500/40"
+                    phoneTouched && (!phone.trim() || phoneInvalid) ? "border-red-400 focus:ring-red-400/40" : "focus:ring-brand-500/40"
                   }`}
                 />
                 {phoneTouched && !phone.trim() && <span className="mt-1 block text-xs text-red-600">رقم الجوال مطلوب</span>}
+                {phoneTouched && phoneInvalid && <span className="mt-1 block text-xs text-red-600">رقم الجوال غير صحيح — اكتبه مثل 05xxxxxxxx</span>}
               </label>
             </div>
             <Button type="button" size="lg" className="mt-5 w-full" onClick={goToDetails}>

@@ -10,6 +10,8 @@ import { requireAdmin } from "@/server/auth/session";
 import { logAudit } from "@/server/audit/log";
 import { getClientIp } from "@/lib/request-ip";
 import { isStoreClosedForVisitor } from "@/server/maintenance";
+import { getCartSessionId } from "@/server/cart/session";
+import { normalizePhone } from "@/lib/phone";
 import { createRateLimiter } from "@/lib/rate-limit";
 import { OrderStatus, PaymentStatus, Prisma } from "@prisma/client";
 import { ORDER_STATUS, type OrderStatusKey } from "@/lib/constants";
@@ -42,10 +44,15 @@ const REQUIRED: [string, string][] = [
 ];
 
 /**
- * حماية بسيطة من إغراق صفحة الدفع بطلبات وهمية متكررة — بالذاكرة داخل
- * نفس العملية (نفس قيود login rate-limit: لا تُشارك بين عدّة نسخ خادم).
+ * حماية من إغراق صفحة الدفع بطلبات وهمية — بالذاكرة داخل نفس العملية.
+ * تُحتسب فقط المحاولات التي اجتازت التحقق (خطأ في حقل لا يُحسب على العميل):
+ *  - لكل زائر (جلسة السلة): 5 طلبات كل 10 دقائق.
+ *  - لكل IP حدّ أوسع بكثير: شبكات الجوال (CGNAT) يتشارك فيها عملاء كثيرون نفس العنوان،
+ *    فالحد هنا لإيقاف الإغراق الآلي فقط لا لحجب عملاء حقيقيين.
  */
-const orderAttempts = createRateLimiter({ max: 5, windowMs: 10 * 60 * 1000 });
+const ORDER_WINDOW_MS = 10 * 60 * 1000;
+const orderAttemptsPerVisitor = createRateLimiter({ max: 5, windowMs: ORDER_WINDOW_MS });
+const orderAttemptsPerIp = createRateLimiter({ max: 30, windowMs: ORDER_WINDOW_MS });
 
 function readContactValues(formData: FormData): CheckoutContactValues {
   return {
@@ -68,15 +75,14 @@ export async function createOrderAction(
   if (await isStoreClosedForVisitor()) {
     return { error: "المتجر في وضع الصيانة حالياً — لا يمكن استقبال طلبات جديدة، يرجى المحاولة لاحقاً.", values };
   }
-  const ip = (await getClientIp()) ?? "unknown";
-  if (!orderAttempts.hit(ip)) {
-    return { error: "عدد كبير من الطلبات خلال وقت قصير — يرجى المحاولة لاحقاً.", values };
-  }
-
   const fieldErrors: Record<string, string> = {};
   for (const [key, label] of REQUIRED) {
     if (!String(formData.get(key) ?? "").trim()) fieldErrors[key] = `${label} مطلوب`;
   }
+
+  // الجوال يُوحَّد (أرقام عربية، +966…) ليُربط الطلب بنفس العميل ويصلح لرسائل واتساب
+  const phone = normalizePhone(String(formData.get("phone") ?? ""));
+  if (!fieldErrors.phone && !phone) fieldErrors.phone = "رقم الجوال غير صحيح — اكتبه مثل 05xxxxxxxx";
 
   const taxNumberRaw = String(formData.get("taxNumber") ?? "").trim();
   if (taxNumberRaw && !TAX_NUMBER_PATTERN.test(taxNumberRaw)) {
@@ -110,6 +116,16 @@ export async function createOrderAction(
     return { error: "يرجى اختيار طريقة الشحن", values };
   }
 
+  // حد المحاولات بعد اجتياز التحقق وقبل أي كتابة (حفظ الإيصال، إنشاء الطلب)
+  const visitorKey = (await getCartSessionId()) ?? "no-session";
+  const ip = await getClientIp();
+  if (orderAttemptsPerVisitor.isLimited(visitorKey) || (ip && orderAttemptsPerIp.isLimited(ip))) {
+    const minutes = Math.max(orderAttemptsPerVisitor.minutesLeft(visitorKey), ip ? orderAttemptsPerIp.minutesLeft(ip) : 0);
+    return { error: `عدد كبير من الطلبات خلال وقت قصير — حاول بعد ${minutes} دقيقة، أو تواصل معنا لإتمام طلبك.`, values };
+  }
+  orderAttemptsPerVisitor.hit(visitorKey);
+  if (ip) orderAttemptsPerIp.hit(ip);
+
   // الإيصال يُحفظ على القرص فقط بعد نجاح كل التحققات — لا ملفات يتيمة من محاولات فاشلة
   let receiptUrl: string | null = null;
   if (receiptFile) {
@@ -125,7 +141,7 @@ export async function createOrderAction(
     const order = await createOrderFromCheckout({
       contact: {
         name: String(formData.get("name")),
-        phone: String(formData.get("phone")),
+        phone: phone!,
         email: String(formData.get("email") ?? "") || undefined,
         city: String(formData.get("city")),
         district: String(formData.get("district") ?? "") || undefined,
